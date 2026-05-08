@@ -64,7 +64,7 @@ def dump_traces(filename: str):
 
 
 @contextmanager
-def trace_region(name: str):
+def trace(name: str):
     start_trace(name)
     try:
         yield
