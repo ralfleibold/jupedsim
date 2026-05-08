@@ -70,14 +70,31 @@ PerfStats Simulation::GetLastStats() const
 void Simulation::Iterate()
 {
     // LOG_DEBUG("Iteration {} / Time {}s", _clock.Iteration(), _clock.ElapsedTime());
+    JPS_TRACE_EVENT("main", "Total Iteration");
     auto t = _perfStats.TraceIterate();
-    _agentRemovalSystem.Run(_agents, _removedAgentsInLastIteration, _stageManager);
-    _neighborhoodSearch.Update(_agents);
-
-    _stageSystem.Run(_stageManager, _neighborhoodSearch, *_geometry);
-    _stategicalDecisionSystem.Run(_journeys, _agents, _stageManager);
-    _tacticalDecisionSystem.Run(*_routingEngine, _agents);
     {
+        JPS_TRACE_EVENT("main", "Agent Removal System");
+        _agentRemovalSystem.Run(_agents, _removedAgentsInLastIteration, _stageManager);
+    }
+    {
+        JPS_TRACE_EVENT("main", "Neighborhood Search");
+        _neighborhoodSearch.Update(_agents);
+    }
+
+    {
+        JPS_TRACE_EVENT("main", "Stage System");
+        _stageSystem.Run(_stageManager, _neighborhoodSearch, *_geometry);
+    }
+    {
+        JPS_TRACE_EVENT("main", "Strategical Decision System");
+        _stategicalDecisionSystem.Run(_journeys, _agents, _stageManager);
+    }
+    {
+        JPS_TRACE_EVENT("main", "Tactical Decision System");
+        _tacticalDecisionSystem.Run(*_routingEngine, _agents);
+    }
+    {
+        JPS_TRACE_EVENT("main", "Operational Decision System");
         auto t2 = _perfStats.TraceOperationalDecisionSystemRun();
         _operationalDecisionSystem.Run(
             _clock.dT(), _clock.ElapsedTime(), _neighborhoodSearch, *_geometry, _agents);
