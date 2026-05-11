@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
-
-#include <fmt/core.h>
+#include <format>
 
 struct CollisionFreeSpeedModelData {
     double timeGap{1};
@@ -9,15 +8,16 @@ struct CollisionFreeSpeedModelData {
     double radius{0.2};
 };
 
+namespace std {
 template <>
-struct fmt::formatter<CollisionFreeSpeedModelData> {
+struct formatter<CollisionFreeSpeedModelData> {
 
     constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
 
     template <typename FormatContext>
     auto format(const CollisionFreeSpeedModelData& m, FormatContext& ctx) const
     {
-        return fmt::format_to(
+        return std::format_to(
             ctx.out(),
             "CollisionFreeSpeedModel[timeGap={}, v0={}, radius={}])",
             m.timeGap,
@@ -25,3 +25,4 @@ struct fmt::formatter<CollisionFreeSpeedModelData> {
             m.radius);
     }
 };
+} // namespace std

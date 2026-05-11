@@ -10,8 +10,7 @@
 #include "Polygon.hpp"
 #include "UniqueID.hpp"
 #include "Util.hpp"
-
-#include <fmt/core.h>
+#include <format>
 
 #include <algorithm>
 #include <cassert>
@@ -124,17 +123,19 @@ public:
     }
 };
 
+namespace std {
 template <>
-struct fmt::formatter<BaseStage> {
+struct formatter<BaseStage> {
 
     constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
 
     template <typename FormatContext>
     auto format(const BaseStage& s, FormatContext& ctx) const
     {
-        return fmt::format_to(ctx.out(), "(id={}, targeting={})", s.Id(), s.CountTargeting());
+        return std::format_to(ctx.out(), "(id={}, targeting={})", s.Id(), s.CountTargeting());
     }
 };
+} // namespace std
 
 class Waypoint : public BaseStage
 {

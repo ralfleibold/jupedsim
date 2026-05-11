@@ -7,8 +7,7 @@
 #include "OperationalModelUpdate.hpp"
 #include "Point.hpp"
 #include "SimulationError.hpp"
-
-#include <fmt/core.h>
+#include <format>
 
 #include <optional>
 #include <string>
@@ -25,14 +24,15 @@ struct PedestrianUpdate {
     bool resetTurning{false};
 };
 
+namespace std {
 template <>
-struct fmt::formatter<PedestrianUpdate> {
+struct formatter<PedestrianUpdate> {
     constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
 
     template <typename FormatContext>
     auto format(const PedestrianUpdate& u, FormatContext& ctx) const
     {
-        return fmt::format_to(
+        return std::format_to(
             ctx.out(),
             "Upd[position={}, velocity={}, e0={}, resetTurning={}]",
             u.position.value_or(Point{}),
@@ -41,6 +41,7 @@ struct fmt::formatter<PedestrianUpdate> {
             u.resetTurning);
     }
 };
+} // namespace std
 
 template <typename T>
 void validateConstraint(

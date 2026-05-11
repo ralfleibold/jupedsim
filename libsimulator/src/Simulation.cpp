@@ -1,6 +1,26 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "Simulation.hpp"
 
+#include <format>
+#include <string>
+#include <vector>
+
+namespace
+{
+    template <typename T>
+    std::string format_vector(const std::vector<T>& vec)
+    {
+        if(vec.empty()) {
+            return "";
+        }
+        std::string result = std::format("{}", vec[0]);
+        for(size_t i = 1; i < vec.size(); ++i) {
+            result += ", " + std::format("{}", vec[i]);
+        }
+        return result;
+    }
+} // namespace
+
 #include "CollisionGeometry.hpp"
 #include "GeneralizedCentrifugalForceModelData.hpp"
 #include "GenericAgent.hpp"
@@ -19,9 +39,7 @@
 #include "Tracing.hpp"
 #include "Visitor.hpp"
 
-#include <fmt/core.h>
-#include <fmt/format.h>
-#include <fmt/ranges.h>
+#include <format>
 
 #include <algorithm>
 #include <cstddef>
@@ -457,14 +475,14 @@ void Simulation::ValidateGeometry(const std::unique_ptr<CollisionGeometry>& geom
         std::string message = "Could not switch the geometry.\n";
 
         if(!faultyAgents.empty()) {
-            message += fmt::format(
+            message += std::format(
                 "The following agents would be outside of the new geometry: {}\n",
-                fmt::join(faultyAgents, ", "));
+                format_vector(faultyAgents));
         }
         if(!faultyStages.empty()) {
-            message += fmt::format(
+            message += std::format(
                 "The following stages would be outside of the new geometry: {}",
-                fmt::join(faultyStages, ", "));
+                format_vector(faultyStages));
         }
 
         throw GeometrySwitchError(message.c_str(), faultyAgents, faultyStages);

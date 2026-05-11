@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
 
-#include <fmt/format.h>
+#include <format>
 
 #include <functional>
 #include <string>
@@ -61,7 +61,7 @@ enum class Level { Debug, Info, Warning, Error, Off };
 // NOLINTNEXTLINE
 #define __LOG(Level, FormatString, ...)                                                            \
     Logging::Logger::Instance().Log##Level##Message(                                               \
-        fmt::format(FMT_STRING(FormatString), __VA_ARGS__))
+        std::format(FormatString, __VA_ARGS__))
 // NOLINTNEXTLINE
 #define LOG_DEBUG(FormatString, ...) __LOG(Debug, FormatString, __VA_ARGS__)
 // NOLINTNEXTLINE
@@ -74,7 +74,7 @@ enum class Level { Debug, Info, Warning, Error, Off };
 // NOLINTNEXTLINE
 #define __LOG(Level, FormatString, ...)                                                            \
     Logging::Logger::Instance().Log##Level##Message(                                               \
-        fmt::format(FMT_STRING(FormatString), ##__VA_ARGS__))
+        std::format(FormatString, ##__VA_ARGS__))
 // NOLINTNEXTLINE
 #define LOG_DEBUG(FormatString, ...) __LOG(Debug, FormatString, ##__VA_ARGS__)
 // NOLINTNEXTLINE

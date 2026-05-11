@@ -97,7 +97,6 @@ target_compile_definitions(simulator PUBLIC
 )
 target_link_libraries(simulator PUBLIC
     common
-    fmt::fmt
     CGAL::CGAL
     build_info
     glm::glm

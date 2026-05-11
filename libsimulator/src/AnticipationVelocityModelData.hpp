@@ -2,8 +2,9 @@
 #pragma once
 
 #include "Point.hpp"
+#include <format>
 
-#include <fmt/core.h>
+
 
 struct AnticipationVelocityModelData {
     double strengthNeighborRepulsion{8.0};
@@ -17,15 +18,16 @@ struct AnticipationVelocityModelData {
     double radius{0.2};
 };
 
+namespace std {
 template <>
-struct fmt::formatter<AnticipationVelocityModelData> {
+struct formatter<AnticipationVelocityModelData> {
 
     constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
 
     template <typename FormatContext>
     auto format(const AnticipationVelocityModelData& m, FormatContext& ctx) const
     {
-        return fmt::format_to(
+        return std::format_to(
             ctx.out(),
             "AnticipationVelocityModel[strengthNeighborRepulsion={}, "
             "rangeNeighborRepulsion={}, wallBufferDistance={}, "
@@ -41,3 +43,4 @@ struct fmt::formatter<AnticipationVelocityModelData> {
             m.velocity);
     }
 };
+} // namespace std

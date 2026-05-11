@@ -2,7 +2,7 @@
 
 #include "Journey.hpp"
 
-#include <fmt/core.h>
+#include <format>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h> // IWYU pragma: keep
 
@@ -45,7 +45,7 @@ void init_journey(py::module_& m)
                 auto iter = desc.find(stageId);
                 if(iter == std::end(desc)) {
                     throw std::runtime_error(
-                        fmt::format(
+                        std::format(
                             "Could not set transition for given stage id {}. Stage not found.",
                             stageId));
                 }

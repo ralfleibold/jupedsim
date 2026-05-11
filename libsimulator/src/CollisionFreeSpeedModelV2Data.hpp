@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
-
-#include <fmt/core.h>
+#include <format>
 
 struct CollisionFreeSpeedModelV2Data {
     double strengthNeighborRepulsion{8.0};
@@ -14,15 +13,16 @@ struct CollisionFreeSpeedModelV2Data {
     double radius{0.2};
 };
 
+namespace std {
 template <>
-struct fmt::formatter<CollisionFreeSpeedModelV2Data> {
+struct formatter<CollisionFreeSpeedModelV2Data> {
 
     constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
 
     template <typename FormatContext>
     auto format(const CollisionFreeSpeedModelV2Data& m, FormatContext& ctx) const
     {
-        return fmt::format_to(
+        return std::format_to(
             ctx.out(),
             "CollisionFreeSpeedModelV2[strengthNeighborRepulsion={}, "
             "rangeNeighborRepulsion={}, strengthGeometryRepulsion={}, rangeGeometryRepulsion={}, "
@@ -36,3 +36,4 @@ struct fmt::formatter<CollisionFreeSpeedModelV2Data> {
             m.radius);
     }
 };
+} // namespace std

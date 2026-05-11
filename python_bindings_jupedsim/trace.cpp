@@ -3,7 +3,7 @@
 #include "Timing.hpp"
 #include "Tracing.hpp"
 
-#include <fmt/core.h>
+#include <format>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 

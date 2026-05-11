@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
 
-#include <fmt/core.h>
-#include <fmt/format.h>
+
+#include <format>
 
 #include <atomic>
 #include <cstddef>
@@ -71,7 +71,7 @@ public:
 
     bool operator>=(const UniqueID& p_other) const noexcept { return !(*this < p_other); };
 
-    friend struct fmt::formatter<UniqueID<Tag>>;
+    friend struct std::formatter<UniqueID<Tag>>;
 };
 
 template <typename Tag, typename Integer>
@@ -90,20 +90,15 @@ struct hash<jps::UniqueID<Tag, Integer>> {
 };
 } // namespace std
 
-namespace fmt
-{
-template <typename Tag>
-struct formatter<::jps::UniqueID<Tag>> {
-    template <typename ParseContext>
-    constexpr auto parse(ParseContext& p_ctx)
-    {
-        return p_ctx.begin();
-    }
+namespace std {
+template <typename Tag, typename Integer>
+struct formatter<jps::UniqueID<Tag, Integer>> {
+    constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
 
     template <typename FormatContext>
-    auto format(::jps::UniqueID<Tag> const& p_id, FormatContext& p_ctx) const
+    auto format(jps::UniqueID<Tag, Integer> const& p_id, FormatContext& ctx) const
     {
-        return fmt::format_to(p_ctx.out(), "{}", p_id.m_value);
+        return std::format_to(ctx.out(), "{}", p_id.m_value);
     }
 };
-} // namespace fmt
+} // namespace std

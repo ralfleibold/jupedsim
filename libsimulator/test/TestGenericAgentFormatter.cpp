@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "GenericAgent.hpp"
 
-#include <fmt/format.h>
+#include <format>
 #include <gtest/gtest.h>
 
 static GenericAgent make_agent(GenericAgent::Model model)
@@ -18,29 +18,29 @@ static GenericAgent make_agent(GenericAgent::Model model)
 TEST(GenericAgentFormatter, FormatsGeneralizedCentrifugalForceModelData)
 {
     auto agent = make_agent(GeneralizedCentrifugalForceModelData{});
-    ASSERT_NO_THROW((void) fmt::format("{}", agent));
+    ASSERT_NO_THROW((void) std::format("{}", agent));
 }
 
 TEST(GenericAgentFormatter, FormatsCollisionFreeSpeedModelData)
 {
     auto agent = make_agent(CollisionFreeSpeedModelData{});
-    ASSERT_NO_THROW((void) fmt::format("{}", agent));
+    ASSERT_NO_THROW((void) std::format("{}", agent));
 }
 
 TEST(GenericAgentFormatter, FormatsCollisionFreeSpeedModelV2Data)
 {
     auto agent = make_agent(CollisionFreeSpeedModelV2Data{});
-    ASSERT_NO_THROW((void) fmt::format("{}", agent));
+    ASSERT_NO_THROW((void) std::format("{}", agent));
 }
 
 TEST(GenericAgentFormatter, FormatsAnticipationVelocityModelData)
 {
     auto agent = make_agent(AnticipationVelocityModelData{});
-    ASSERT_NO_THROW((void) fmt::format("{}", agent));
+    ASSERT_NO_THROW((void) std::format("{}", agent));
 }
 
 TEST(GenericAgentFormatter, FormatsSocialForceModelData)
 {
     auto agent = make_agent(SocialForceModelData{});
-    ASSERT_NO_THROW((void) fmt::format("{}", agent));
+    ASSERT_NO_THROW((void) std::format("{}", agent));
 }

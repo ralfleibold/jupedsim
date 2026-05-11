@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
 
-#include <fmt/core.h>
-#include <fmt/format.h>
 
+#include <format>
 #include <tuple>
 
 class Point
@@ -91,8 +90,9 @@ const Point operator*(const Point& p, const double f);
 /// division
 const Point operator/(const Point& p, const double f);
 
+namespace std {
 template <>
-struct fmt::formatter<Point> {
+struct formatter<Point> {
     char presentation{'f'};
 
     constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
@@ -100,6 +100,7 @@ struct fmt::formatter<Point> {
     template <typename FormatContext>
     auto format(const Point& p, FormatContext& ctx) const
     {
-        return fmt::format_to(ctx.out(), "({}, {})", p.x, p.y);
+        return std::format_to(ctx.out(), "({}, {})", p.x, p.y);
     }
 };
+} // namespace std

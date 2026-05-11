@@ -3,6 +3,7 @@
 
 #include <Logger.hpp>
 
+#include <cmath>
 #include <limits>
 
 bool Point::isZeroLength() const

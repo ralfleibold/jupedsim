@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "UniqueID.hpp"
 
-#include <fmt/format.h>
+#include <format>
 #include <gtest/gtest.h>
 
 #include <memory>
-
-using namespace fmt::literals;
 using ::jps::UniqueID;
 
 TEST(UniqueId, CanBeConstructedFromUnderlyingType)
@@ -85,7 +83,7 @@ TEST(UniqueId, CanBeFormatted)
     struct Foo {
     };
     jps::UniqueID<Foo> id;
-    ASSERT_EQ("1", fmt::format("{}", id));
+    ASSERT_EQ("1", std::format("{}", id));
 }
 
 TEST(UniqueId, CanBeHashed)

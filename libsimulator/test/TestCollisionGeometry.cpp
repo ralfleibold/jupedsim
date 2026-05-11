@@ -3,8 +3,8 @@
 #include "LineSegment.hpp"
 #include "gtest/gtest.h"
 
-#include <fmt/format.h>
-#include <fmt/ranges.h>
+#include <format>
+
 #include <gtest/gtest.h>
 
 struct CellAdjacencyTestData {

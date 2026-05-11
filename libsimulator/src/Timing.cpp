@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "Timing.hpp"
 
-#include <fmt/core.h>
+
 #include <perfetto.h>
 
 #include <chrono>

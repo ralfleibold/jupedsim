@@ -8,8 +8,7 @@
 #include "SimulationError.hpp"
 
 #include <CGAL/Boolean_set_operations_2.h>
-#include <fmt/format.h>
-#include <fmt/ranges.h>
+#include <format>
 
 #include <memory>
 #include <vector>

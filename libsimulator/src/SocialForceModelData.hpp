@@ -2,8 +2,8 @@
 #pragma once
 
 #include "Point.hpp"
+#include <format>
 
-#include <fmt/core.h>
 struct SocialForceModelData {
     Point velocity{}; // v
     double mass{80.0}; // m
@@ -15,15 +15,16 @@ struct SocialForceModelData {
     double radius{0.3}; // r
 };
 
+namespace std {
 template <>
-struct fmt::formatter<SocialForceModelData> {
+struct formatter<SocialForceModelData> {
 
     constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
 
     template <typename FormatContext>
     auto format(const SocialForceModelData& m, FormatContext& ctx) const
     {
-        return fmt::format_to(
+        return std::format_to(
             ctx.out(),
             "SFM[velocity={}, m={}, v0={}, tau={}, A_ped={}, A_obst={}, B={}, r={}])",
             m.velocity,
@@ -36,3 +37,4 @@ struct fmt::formatter<SocialForceModelData> {
             m.radius);
     }
 };
+} // namespace std

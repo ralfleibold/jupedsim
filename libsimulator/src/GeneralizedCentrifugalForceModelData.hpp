@@ -2,8 +2,8 @@
 #pragma once
 
 #include "Point.hpp"
+#include <format>
 
-#include <fmt/core.h>
 struct GeneralizedCentrifugalForceModelData {
     double speed{};
     Point e0{};
@@ -17,14 +17,16 @@ struct GeneralizedCentrifugalForceModelData {
     double BMax{0.4};
 };
 
+namespace std {
 template <>
-struct fmt::formatter<GeneralizedCentrifugalForceModelData> {
+struct formatter<GeneralizedCentrifugalForceModelData> {
 
     constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
 
     template <typename FormatContext>
     auto format(const GeneralizedCentrifugalForceModelData& m, FormatContext& ctx) const
     {
-        return fmt::format_to(ctx.out(), "GCFM[speed={}])", m.speed);
+        return std::format_to(ctx.out(), "GCFM[speed={}])", m.speed);
     }
 };
+} // namespace std

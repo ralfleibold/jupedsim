@@ -9,8 +9,7 @@
 #include "SocialForceModelData.hpp"
 #include "UniqueID.hpp"
 #include "Visitor.hpp"
-
-#include <fmt/core.h>
+#include <format>
 
 #include <utility>
 #include <variant>
@@ -57,8 +56,9 @@ struct GenericAgent {
     {
     }
 };
+namespace std {
 template <>
-struct fmt::formatter<GenericAgent> {
+struct formatter<GenericAgent> {
     constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
 
     template <typename FormatContext>
@@ -66,7 +66,7 @@ struct fmt::formatter<GenericAgent> {
     {
         return std::visit(
             [&ctx, &agent](const auto& m) {
-                return fmt::format_to(
+                return std::format_to(
                     ctx.out(),
                     "Agent[id={}, journey={}, stage={}, destination={}, waypoint={}, pos={}, "
                     "orientation={}, model={})",
@@ -82,3 +82,4 @@ struct fmt::formatter<GenericAgent> {
             agent.model);
     }
 };
+} // namespace std

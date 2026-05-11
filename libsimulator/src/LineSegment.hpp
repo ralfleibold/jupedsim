@@ -2,8 +2,8 @@
 #pragma once
 
 #include "Point.hpp"
+#include <format>
 
-#include <fmt/core.h>
 
 class LineSegment
 {
@@ -50,13 +50,15 @@ public:
     double LengthSquare() const;
 };
 
+namespace std {
 template <>
-struct fmt::formatter<LineSegment> {
+struct formatter<LineSegment> {
     constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
 
     template <typename FormatContext>
     auto format(const LineSegment& ls, FormatContext& ctx) const
     {
-        return fmt::format_to(ctx.out(), "LineSegment({}, {})", ls.p1, ls.p2);
+        return std::format_to(ctx.out(), "LineSegment({}, {})", ls.p1, ls.p2);
     }
 };
+} // namespace std
