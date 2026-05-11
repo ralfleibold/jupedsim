@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 from contextlib import contextmanager
+from functools import wraps
 
 import jupedsim.native as py_jps
 
@@ -64,9 +65,36 @@ def dump_traces(filename: str):
 
 
 @contextmanager
-def trace(name: str):
+def trace_event(name: str):
     start_trace(name)
     try:
         yield
     finally:
         end_trace()
+
+
+def trace_function(_func=None, *, name: str | None = None):
+    """Decorator to trace a function using the function name as the trace event name.
+
+    Args:
+        name: Optional name for the trace event. If not provided, uses the function's
+              ``__name__`` attribute.
+
+    Returns:
+        A decorator that wraps the function with tracing.
+    """
+
+    def decorator(func):
+        trace_name = name if name is not None else func.__name__
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            start_trace(trace_name)
+            try:
+                return func(*args, **kwargs)
+            finally:
+                end_trace()
+
+        return wrapper
+
+    return decorator(_func) if _func else decorator

@@ -5,10 +5,13 @@
 
 PERFETTO_DEFINE_CATEGORIES(perfetto::Category("main").SetDescription("Main iteration over agents"));
 
-#ifndef JPS_TRACE_EVENT
 #define JPS_TRACE_EVENT TRACE_EVENT
 #define JPS_TRACE_EVENT_BEGIN TRACE_EVENT_BEGIN
 #define JPS_TRACE_EVENT_END TRACE_EVENT_END
+#if defined(_MSC_VER)
+#define JPS_TRACE_FUNC(category) JPS_TRACE_EVENT(category, __FUNCTION__)
+#else
+#define JPS_TRACE_FUNC(category) JPS_TRACE_EVENT(category, __PRETTY_FUNCTION__)
 #endif
 
 #include <chrono>

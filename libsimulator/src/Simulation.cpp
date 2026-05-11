@@ -217,7 +217,7 @@ BaseStage::ID Simulation::AddStage(const StageDescription stageDescription)
 
 GenericAgent::ID Simulation::AddAgent(GenericAgent agent)
 {
-
+    JPS_TRACE_FUNC("main");
     if(!_geometry->InsideGeometry(agent.pos)) {
         throw SimulationError("Agent {} not inside walkable area", agent.pos);
     }
