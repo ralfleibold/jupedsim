@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from jupedsim_visualizer.geometry import Geometry
+from jupedsim_visualizer.quick3d.geometry_view import Quick3DGeometryView
 from jupedsim_visualizer.replay_widget import ReplayWidget
 from jupedsim_visualizer.trajectory import Trajectory
 from jupedsim_visualizer.view_geometry_widget import ViewGeometryWidget
@@ -47,6 +48,8 @@ class MainWindow(QMainWindow):
         open_menu = menu.addMenu("File")
         open_wkt_act = open_menu.addAction("Open wkt file")
         open_wkt_act.triggered.connect(self._open_wkt)
+        open_wkt_q3d_act = open_menu.addAction("Open wkt file (Quick 3D, preview)")
+        open_wkt_q3d_act.triggered.connect(self._open_wkt_quick3d)
         open_replay_act = open_menu.addAction("Open replay file")
         open_replay_act.triggered.connect(self._open_replay)
         settings_menu = menu.addMenu("Settings")
@@ -100,13 +103,21 @@ class MainWindow(QMainWindow):
     def _toggle_triangulation(self, state: bool) -> None:
         self.settings.setValue("show_triangulation", state)
         for idx in range(self.tabs.count()):
-            self.tabs.widget(idx).geo.show_triangulation(state)
+            tab = self.tabs.widget(idx)
+            if hasattr(tab, "geo"):
+                tab.geo.show_triangulation(state)
+            if hasattr(tab, "show_mesh"):
+                tab.show_mesh(state)
         self.repaint()
 
     def _toggle_grid(self, state: bool) -> None:
         self.settings.setValue("show_grid", state)
         for idx in range(self.tabs.count()):
-            self.tabs.widget(idx).render_widget.show_grid(state)
+            tab = self.tabs.widget(idx)
+            if hasattr(tab, "render_widget"):
+                tab.render_widget.show_grid(state)
+            elif hasattr(tab, "show_grid"):
+                tab.show_grid(state)
         self.repaint()
 
     def _open_wkt(self):
@@ -139,6 +150,43 @@ class MainWindow(QMainWindow):
             tab_idx = self.tabs.insertTab(0, tab, file.name)
             self.tabs.setCurrentIndex(tab_idx)
             self.setUpdatesEnabled(True)
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Error importing WKT geometry",
+                f"Error importing WKT geometry:\n{e}",
+            )
+            return
+
+    def _open_wkt_quick3d(self):
+        base_path_obj = self.settings.value(
+            "files/last_wkt_location",
+            type=str,
+            defaultValue=Path("~").expanduser(),
+        )
+        base_path = Path(str(base_path_obj))
+        file, _ = QFileDialog.getOpenFileName(
+            self, caption="Open WKT file (Quick 3D)", dir=str(base_path)
+        )
+        if not file:
+            return
+        file = Path(file)
+        self.settings.setValue("files/last_wkt_location", str(file.parent))
+        try:
+            polygon = shapely.from_wkt(file.read_text(encoding="UTF-8"))
+            navi = jps.RoutingEngine(polygon)
+            # Capture geometry/maximized state so Qt's layout system doesn't
+            # auto-shrink the main window when the new tab's sizeHint kicks in.
+            saved_geometry = self.saveGeometry()
+            was_maximized = self.isMaximized()
+            tab = Quick3DGeometryView(polygon, navi=navi, parent=self)
+            tab.show_mesh(self._show_triangulation.isChecked())
+            tab.show_grid(self._show_grid.isChecked())
+            tab_idx = self.tabs.insertTab(0, tab, f"[Q3D] {file.name}")
+            self.tabs.setCurrentIndex(tab_idx)
+            self.restoreGeometry(saved_geometry)
+            if was_maximized:
+                self.showMaximized()
         except Exception as e:
             QMessageBox.critical(
                 self,
