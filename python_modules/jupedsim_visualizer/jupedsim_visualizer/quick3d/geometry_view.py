@@ -19,7 +19,7 @@ from pathlib import Path
 
 import shapely
 from PySide6.QtCore import Qt, QSize, QUrl, Signal
-from PySide6.QtQuick import QQuickView
+from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import (
     QLabel,
     QSizePolicy,
@@ -123,12 +123,17 @@ class Quick3DGeometryView(QWidget):
             origin=(self._cx, self._cy),
         )
 
-        # QQuickView + createWindowContainer = native GPU window embedded as
-        # a child widget. Same fast path as the smoke test. Using QQuickWidget
-        # instead would force a render-to-FBO + CPU composite that costs a
-        # lot of CPU and shows noticeable lag during interaction.
-        self._view = QQuickView()
-        self._view.setResizeMode(QQuickView.ResizeMode.SizeRootObjectToView)
+        # QQuickWidget renders the Quick 3D scene to an offscreen FBO and
+        # composites it as an ordinary widget. We deliberately do NOT use
+        # QQuickView + createWindowContainer: embedding a native (foreign)
+        # QQuickView window into the QTabWidget hierarchy deadlocks on
+        # Wayland during the wl_subsurface reparenting (the app froze on
+        # tab insertion). QQuickWidget has no native subsurface and is robust
+        # across X11 / Wayland / WSL, which is the whole point of this viewer.
+        self._view = QQuickWidget()
+        self._view.setResizeMode(QQuickWidget.ResizeMode.SizeRootObjectToView)
+        self._view.setFocusPolicy(Qt.StrongFocus)  # keyboard events reach QML
+        self._view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         ctx = self._view.rootContext()
         ctx.setContextProperty("wallGeometry", self._wall_geometry)
         ctx.setContextProperty("meshGeometry", self._mesh_geometry)
@@ -141,9 +146,10 @@ class Quick3DGeometryView(QWidget):
         ctx.setContextProperty("viewMag", self._mag)
         self._view.setSource(QUrl.fromLocalFile(str(_QML_DIR / "GeometryScene.qml")))
 
-        self._quick = QWidget.createWindowContainer(self._view, self)
-        self._quick.setFocusPolicy(Qt.StrongFocus)  # keyboard events reach QML
-        self._quick.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        # QQuickWidget *is* the rendering widget; no createWindowContainer
+        # wrapper. `self._quick` stays the name used by the size/layout math
+        # (_view_size) and the layout below.
+        self._quick = self._view
 
         # Single combined status line — cursor x/y, nav id under cursor, and
         # path length (when a path is drawn). Always-current so the user sees
@@ -200,14 +206,10 @@ class Quick3DGeometryView(QWidget):
     # ----- camera helpers -------------------------------------------------
 
     def _view_size(self) -> tuple[int, int]:
-        """Size used for all pixel-to-world math. The QQuickView's native
-        window is resized on a different pass from the container's
-        `resizeEvent`, so reading `self._view.width()` inside the resize
-        handler returns stale (often zero) values. The container widget
-        itself is the layout-system source of truth and its size is correct
-        at every resize callback; the QQuickView ends up the same size once
-        Qt finishes the resize. QML's MouseArea reports coordinates in that
-        same space, so this works for input math too."""
+        """Size used for all pixel-to-world math. `self._quick` is the
+        QQuickWidget that owns the rendered surface; its size tracks the
+        layout at every resize callback. QML's MouseArea reports coordinates
+        in that same space, so this works for input math too."""
         return (max(1, self._quick.width()), max(1, self._quick.height()))
 
     def _fit_magnification(self) -> float:
