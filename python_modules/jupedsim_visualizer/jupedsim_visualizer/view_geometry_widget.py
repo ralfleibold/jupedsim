@@ -14,7 +14,12 @@ from PySide6.QtWidgets import (
 from jupedsim_visualizer.geometry import Geometry
 from jupedsim_visualizer.geometry_widget import RenderWidget
 
-_ROUTING_ENGINES = ["AStar", "DirectPath"]
+_ROUTING_ENGINES = ["AStar", "SurfaceMeshShortestPath", "DirectPath"]
+
+
+def _provides_mesh(navi) -> bool:
+    """An engine can display a triangulation iff it exposes a mesh()."""
+    return callable(getattr(navi, "mesh", None))
 
 
 class ViewGeometryWidget(QWidget):
@@ -24,12 +29,14 @@ class ViewGeometryWidget(QWidget):
         geo: Geometry,
         name_text: str,
         info_text: str,
+        geometry=None,
         parent=None,
     ):
         QWidget.__init__(self, parent)
         self.geo = geo
-        self._astar_navi = navi
-        self._direct_path_navi = jps.DirectPathRoutingEngine()
+        self._geometry = geometry
+        # Lazily-built engines keyed by combo label; AStar is the one already set up.
+        self._navis = {"AStar": navi}
         self._show_triangulation_requested = False
 
         bottom_layout = QHBoxLayout()
@@ -70,17 +77,29 @@ class ViewGeometryWidget(QWidget):
         self.render_widget.on_hover_triangle.connect(self.hover_label.setText)
         routing_combo.currentTextChanged.connect(self._on_routing_engine_changed)
 
+    def _navi_for(self, engine_name: str):
+        navi = self._navis.get(engine_name)
+        if navi is None:
+            if engine_name == "SurfaceMeshShortestPath":
+                navi = jps.SurfaceMeshShortestPathRoutingEngine()
+                navi.set_geometry(self._geometry)
+            elif engine_name == "DirectPath":
+                navi = jps.DirectPathRoutingEngine()
+            else:
+                raise ValueError(f"Unknown routing engine: {engine_name}")
+            self._navis[engine_name] = navi
+        return navi
+
     def _on_routing_engine_changed(self, engine_name: str) -> None:
-        if engine_name == "DirectPath":
-            self.geo.show_triangulation(False)
-            self.render_widget.set_routing_engine(self._direct_path_navi)
-        else:
-            self.geo.show_triangulation(self._show_triangulation_requested)
-            self.render_widget.set_routing_engine(self._astar_navi)
+        navi = self._navi_for(engine_name)
+        self.geo.show_triangulation(
+            _provides_mesh(navi) and self._show_triangulation_requested
+        )
+        self.render_widget.set_routing_engine(navi)
 
     def set_triangulation_visible(self, state: bool) -> None:
         self._show_triangulation_requested = state
-        if self._routing_combo.currentText() == "AStar":
+        if _provides_mesh(self.render_widget.navi):
             self.geo.show_triangulation(state)
 
     def render(self):

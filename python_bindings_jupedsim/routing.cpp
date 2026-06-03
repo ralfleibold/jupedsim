@@ -2,6 +2,7 @@
 #include "AStarRoutingEngine.hpp"
 #include "CollisionGeometry.hpp"
 #include "RoutingEngine.hpp"
+#include "SurfaceMeshShortestPathRoutingEngine.hpp"
 #include "conversion.hpp"
 
 #include <pybind11/pybind11.h>
@@ -202,5 +203,41 @@ The returned data is to be interpreted as:
 Returns:
     A tuple of vertices and list of polygons which in turn are a list of indices
     tuple[list[tuple[float, float]],list[list[int]]]
+)doc");
+
+    py::class_<SurfaceMeshShortestPathRoutingEngine, RoutingEngine, py::smart_holder>(
+        m,
+        "SurfaceMeshShortestPathRoutingEngine",
+        R"doc(Exact geodesic any-angle routing via CGAL's Surface_mesh_shortest_path.
+
+The walkable region is lifted to a flat surface mesh; geodesics on it route
+around holes and equal the 2D Euclidean shortest path.
+
+Default-construct object. Either pass to :class:`Simulation` (which calls
+:meth:`set_geometry` automatically) or call :meth:`set_geometry` explicitly
+before performing any routing query.
+)doc")
+        .def(py::init<>(), "Default-construct an engine without a geometry.")
+        .def(
+            "mesh",
+            [](const SurfaceMeshShortestPathRoutingEngine& routingEngine) {
+                const auto mesh = routingEngine.MeshData();
+                if(!mesh) {
+                    throw std::runtime_error(
+                        "SurfaceMeshShortestPathRoutingEngine has no geometry; call set_geometry "
+                        "first");
+                }
+                const auto polygonCount = mesh->CountPolygons();
+                using Ind = decltype(mesh->Polygons(0).vertices);
+                std::vector<Ind> polys;
+                polys.reserve(polygonCount);
+                for(size_t index = 0; index < polygonCount; ++index) {
+                    polys.emplace_back(mesh->Polygons(index).vertices);
+                }
+                return std::make_tuple(intoTuples(mesh->FVertices()), polys);
+            },
+            R"doc(Access the navigation mesh geometry.
+
+See :meth:`AStarRoutingEngine.mesh` for the returned data layout.
 )doc");
 }

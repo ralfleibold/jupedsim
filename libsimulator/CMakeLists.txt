@@ -67,6 +67,8 @@ add_library(simulator STATIC
     src/Polygon.hpp
     src/AStarRoutingEngine.cpp
     src/AStarRoutingEngine.hpp
+    src/SurfaceMeshShortestPathRoutingEngine.cpp
+    src/SurfaceMeshShortestPathRoutingEngine.hpp
     src/RoutingEngine.cpp
     src/RoutingEngine.hpp
     src/Simulation.cpp
@@ -144,6 +146,7 @@ if (BUILD_TESTS)
         test/TestPoint.cpp
         test/TestSimulationClock.cpp
         test/TestStage.cpp
+        test/TestSurfaceMeshShortestPathRoutingEngine.cpp
         test/TestUniqueID.cpp
     )
 

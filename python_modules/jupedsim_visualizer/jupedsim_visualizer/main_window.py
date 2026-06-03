@@ -137,7 +137,7 @@ class MainWindow(QMainWindow):
             self.setUpdatesEnabled(False)
             geo = Geometry(navi)
             tab = ViewGeometryWidget(
-                navi, geo, name_text, info_text, parent=self
+                navi, geo, name_text, info_text, geometry=polygon, parent=self
             )
             tab.set_triangulation_visible(self._show_triangulation.isChecked())
             tab.render_widget.show_grid(self._show_grid.isChecked())

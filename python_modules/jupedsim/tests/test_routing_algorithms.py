@@ -147,3 +147,59 @@ def test_python_direct_path_engine_drives_simulation():
             break
     else:
         pytest.fail("Agent did not reach the exit within the iteration limit")
+
+
+def test_construct_with_surface_mesh_engine():
+    sim = jps.Simulation(
+        model=jps.CollisionFreeSpeedModel(),
+        geometry=GEOMETRY,
+        routing_engine=jps.SurfaceMeshShortestPathRoutingEngine(),
+    )
+    assert sim.routing_engine_name == "SurfaceMeshShortestPath"
+
+
+def test_surface_mesh_engine_name():
+    navi = jps.SurfaceMeshShortestPathRoutingEngine()
+    assert navi.name == "SurfaceMeshShortestPath"
+
+
+def test_surface_mesh_waypoints_straight_line_in_open_space():
+    navi = jps.SurfaceMeshShortestPathRoutingEngine()
+    navi.set_geometry(GEOMETRY)
+    from_pt = (10.0, 10.0)
+    to_pt = (90.0, 90.0)
+    waypoints = navi.compute_waypoints(from_pt, to_pt)
+    expected_dist = math.hypot(90 - 10, 90 - 10)
+    path_dist = sum(
+        math.hypot(b[0] - a[0], b[1] - a[1])
+        for a, b in zip(waypoints[:-1], waypoints[1:])
+    )
+    assert math.isclose(path_dist, expected_dist, rel_tol=1e-6)
+
+
+def test_surface_mesh_waypoints_route_around_obstacle():
+    """A central obstacle forces the geodesic to bend around a corner."""
+    navi = jps.SurfaceMeshShortestPathRoutingEngine()
+    navi.set_geometry(
+        "POLYGON((0 0, 10 0, 10 10, 0 10, 0 0), (4 4, 6 4, 6 6, 4 6, 4 4))"
+    )
+    waypoints = navi.compute_waypoints((1.0, 5.0), (9.0, 5.0))
+    path_dist = sum(
+        math.hypot(b[0] - a[0], b[1] - a[1])
+        for a, b in zip(waypoints[:-1], waypoints[1:])
+    )
+    # Tight path (1,5)->(4,4)->(6,4)->(9,5): 2*sqrt(10) + 2 ≈ 8.3246 > 8 (blocked direct line).
+    assert path_dist > 8.0
+    assert math.isclose(path_dist, 2 * math.sqrt(10) + 2, rel_tol=1e-4)
+    # Corner-only output: collinear crossings of CDT diagonals are stripped.
+    assert len(waypoints) == 4
+
+
+def test_surface_mesh_is_routable():
+    navi = jps.SurfaceMeshShortestPathRoutingEngine()
+    navi.set_geometry(
+        "POLYGON((0 0, 10 0, 10 10, 0 10, 0 0), (4 4, 6 4, 6 6, 4 6, 4 4))"
+    )
+    assert navi.is_routable((1.0, 1.0)) is True
+    assert navi.is_routable((5.0, 5.0)) is False  # inside obstacle
+    assert navi.is_routable((20.0, 20.0)) is False  # outside room

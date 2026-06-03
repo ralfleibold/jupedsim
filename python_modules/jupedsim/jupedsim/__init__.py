@@ -72,6 +72,7 @@ from jupedsim.routing import (
     AStarRoutingEngine,
     DirectPathRoutingEngine,
     RoutingEngine,
+    SurfaceMeshShortestPathRoutingEngine,
 )
 from jupedsim.serialization import TrajectoryWriter
 from jupedsim.simulation import Simulation
@@ -125,6 +126,7 @@ __all__ = [
     "RecordingAgent",
     "RecordingFrame",
     "AStarRoutingEngine",
+    "SurfaceMeshShortestPathRoutingEngine",
     "DirectPathRoutingEngine",
     "RoutingEngine",
     "Simulation",
