@@ -41,6 +41,41 @@ def _triangulate_polygon_with_holes(polygon: shapely.Polygon):
     return out
 
 
+def _geometry_from_buffer(
+    buf: bytes | bytearray,
+    primitive: QQuick3DGeometry.PrimitiveType,
+    bounds: tuple[QVector3D, QVector3D] | None = None,
+) -> QQuick3DGeometry:
+    """Wrap a packed vertex buffer as a QQuick3DGeometry.
+
+    Vertex layout is fixed across all builders here: stride 24 bytes =
+    position (3 × F32 @ offset 0) + normal (3 × F32 @ offset 12). Normals are
+    only meaningful for the lit Triangles meshes, but the Lines geometries
+    keep the same layout for uniformity.
+
+    *bounds* (min, max corners) is set when provided so Quick 3D can frame /
+    cull; pass None to skip it (e.g. an empty buffer).
+    """
+    geometry = QQuick3DGeometry()
+    geometry.clear()
+    geometry.setStride(24)
+    geometry.setVertexData(QByteArray(bytes(buf)))
+    geometry.setPrimitiveType(primitive)
+    geometry.addAttribute(
+        QQuick3DGeometry.Attribute.PositionSemantic,
+        0,
+        QQuick3DGeometry.Attribute.F32Type,
+    )
+    geometry.addAttribute(
+        QQuick3DGeometry.Attribute.NormalSemantic,
+        12,
+        QQuick3DGeometry.Attribute.F32Type,
+    )
+    if bounds is not None:
+        geometry.setBounds(bounds[0], bounds[1])
+    return geometry
+
+
 def build_mesh_edges_geometry(
     vertices: list[tuple[float, float]],
     polygons: list[list[int]],
@@ -58,7 +93,6 @@ def build_mesh_edges_geometry(
                   fill (which is at z=0). Quick 3D won't z-fight here.
     """
     ox, oy = origin
-    stride = 24  # position (3 float) + normal (3 float)
     buf = bytearray()
     nx, ny, nz = 0.0, 0.0, 1.0  # normals unused for Lines but keep layout consistent
 
@@ -74,30 +108,17 @@ def build_mesh_edges_geometry(
                 "<ffffff", float(bx) - ox, float(by) - oy, z, nx, ny, nz
             )
 
-    geometry = QQuick3DGeometry()
-    geometry.clear()
-    geometry.setStride(stride)
-    geometry.setVertexData(QByteArray(bytes(buf)))
-    geometry.setPrimitiveType(QQuick3DGeometry.PrimitiveType.Lines)
-    geometry.addAttribute(
-        QQuick3DGeometry.Attribute.PositionSemantic,
-        0,
-        QQuick3DGeometry.Attribute.F32Type,
-    )
-    geometry.addAttribute(
-        QQuick3DGeometry.Attribute.NormalSemantic,
-        12,
-        QQuick3DGeometry.Attribute.F32Type,
-    )
-
+    bounds = None
     if vertices:
         xs = [vx - ox for vx, _ in vertices]
         ys = [vy - oy for _, vy in vertices]
-        geometry.setBounds(
+        bounds = (
             QVector3D(min(xs), min(ys), z),
             QVector3D(max(xs), max(ys), z),
         )
-    return geometry
+    return _geometry_from_buffer(
+        buf, QQuick3DGeometry.PrimitiveType.Lines, bounds
+    )
 
 
 def build_grid_geometry(
@@ -122,7 +143,6 @@ def build_grid_geometry(
     sy = math.floor(ymin / spacing) * spacing
     ey = math.ceil(ymax / spacing) * spacing
 
-    stride = 24
     buf = bytearray()
 
     def emit(x, y):
@@ -142,26 +162,13 @@ def build_grid_geometry(
         emit(ex, y)
         y += spacing
 
-    geometry = QQuick3DGeometry()
-    geometry.clear()
-    geometry.setStride(stride)
-    geometry.setVertexData(QByteArray(bytes(buf)))
-    geometry.setPrimitiveType(QQuick3DGeometry.PrimitiveType.Lines)
-    geometry.addAttribute(
-        QQuick3DGeometry.Attribute.PositionSemantic,
-        0,
-        QQuick3DGeometry.Attribute.F32Type,
-    )
-    geometry.addAttribute(
-        QQuick3DGeometry.Attribute.NormalSemantic,
-        12,
-        QQuick3DGeometry.Attribute.F32Type,
-    )
-    geometry.setBounds(
+    bounds = (
         QVector3D(sx - ox, sy - oy, z),
         QVector3D(ex - ox, ey - oy, z),
     )
-    return geometry
+    return _geometry_from_buffer(
+        buf, QQuick3DGeometry.PrimitiveType.Lines, bounds
+    )
 
 
 def _grid_spacing_for_extent(extent: float) -> float:
@@ -193,7 +200,6 @@ def build_path_geometry(
     drivers cap GL_LINES at 1 px — so we extrude each segment perpendicular
     to its direction. No miter joints; per-segment quads are good enough."""
     ox, oy = origin
-    stride = 24
     buf = bytearray()
     nx, ny, nz = 0.0, 0.0, 1.0
     half = max(width / 2.0, 1e-6)
@@ -223,27 +229,15 @@ def build_path_geometry(
         emit(AL); emit(BL); emit(AR)
         emit(BL); emit(BR); emit(AR)
 
-    geometry = QQuick3DGeometry()
-    geometry.clear()
-    geometry.setStride(stride)
-    geometry.setVertexData(QByteArray(bytes(buf)))
-    geometry.setPrimitiveType(QQuick3DGeometry.PrimitiveType.Triangles)
-    geometry.addAttribute(
-        QQuick3DGeometry.Attribute.PositionSemantic,
-        0,
-        QQuick3DGeometry.Attribute.F32Type,
-    )
-    geometry.addAttribute(
-        QQuick3DGeometry.Attribute.NormalSemantic,
-        12,
-        QQuick3DGeometry.Attribute.F32Type,
-    )
+    bounds = None
     if xs:
-        geometry.setBounds(
+        bounds = (
             QVector3D(min(xs), min(ys), z),
             QVector3D(max(xs), max(ys), z),
         )
-    return geometry
+    return _geometry_from_buffer(
+        buf, QQuick3DGeometry.PrimitiveType.Triangles, bounds
+    )
 
 
 def triangulate(geom: shapely.geometry.base.BaseGeometry) -> list[tuple]:
@@ -271,8 +265,6 @@ def build_polygon_geometry(
     # numeric scale of real geometries (SiB2023 is around (-2000, -300)) is
     # noticeably jittery without this.
     ox, oy = origin
-    # Vertex layout: position (3 float) + normal (3 float) = 24 bytes / vertex.
-    stride = 24
     buf = bytearray()
     for tri in triangles:
         for (x, y) in tri:
@@ -280,32 +272,19 @@ def build_polygon_geometry(
                 "<ffffff", float(x) - ox, float(y) - oy, 0.0, 0.0, 0.0, 1.0
             )
 
-    geometry = QQuick3DGeometry()
-    geometry.clear()
-    geometry.setStride(stride)
-    geometry.setVertexData(QByteArray(bytes(buf)))
-    geometry.setPrimitiveType(QQuick3DGeometry.PrimitiveType.Triangles)
-    geometry.addAttribute(
-        QQuick3DGeometry.Attribute.PositionSemantic,
-        0,
-        QQuick3DGeometry.Attribute.F32Type,
-    )
-    geometry.addAttribute(
-        QQuick3DGeometry.Attribute.NormalSemantic,
-        12,
-        QQuick3DGeometry.Attribute.F32Type,
-    )
-
     # Provide bounds so Quick 3D can frame / cull properly.
+    bounds = None
     xs, ys = [], []
     for tri in triangles:
         for (x, y) in tri:
             xs.append(x)
             ys.append(y)
     if xs:
-        geometry.setBounds(
+        bounds = (
             QVector3D(min(xs) - ox, min(ys) - oy, 0.0),
             QVector3D(max(xs) - ox, max(ys) - oy, 0.0),
         )
 
-    return geometry
+    return _geometry_from_buffer(
+        buf, QQuick3DGeometry.PrimitiveType.Triangles, bounds
+    )
