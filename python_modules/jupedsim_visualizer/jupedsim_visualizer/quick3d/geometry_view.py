@@ -14,7 +14,6 @@ Controls:
 """
 from __future__ import annotations
 
-import math
 from pathlib import Path
 
 import shapely
@@ -33,9 +32,9 @@ from jupedsim_visualizer.quick3d.polygon_geometry import (
     _grid_spacing_for_extent,
     build_grid_geometry,
     build_mesh_edges_geometry,
-    build_path_geometry,
     build_polygon_geometry,
 )
+from jupedsim_visualizer.quick3d.routing_controller import RoutingController
 
 _QML_DIR = Path(__file__).parent / "qml"
 
@@ -66,20 +65,23 @@ class Quick3DGeometryView(QWidget):
         extent_x = (xmax - xmin) or 1.0
         extent_y = (ymax - ymin) or 1.0
         self._extent = max(extent_x, extent_y)  # kept for path width / grid
-        self._navi = navi
 
         # All pan/zoom/mag/fit/px↔world math lives in the camera (see
         # camera.py). The view only reads the viewport size and pushes the
         # camera's pan/mag into QML.
         self._camera = Camera2D(cx, cy, extent_x, extent_y)
 
-        # Routing state. `_route_from` / `_route_to` persist across release —
-        # the path stays drawn until the user starts a new route.
-        self._route_from: tuple[float, float] | None = None
-        self._route_to: tuple[float, float] | None = None
-        self._dragging = False
-        self._path_waypoints: list[tuple[float, float]] | None = None
-        self._path_distance = 0.0
+        # Live routing (endpoints, drag flag, waypoints, distance, and turning
+        # waypoints into the path ribbon) lives in the controller (see
+        # routing_controller.py). The view forwards QML signals to it; the frame
+        # coalescing below decides when its recompute/rebuild actually run.
+        # `_set_path_geometry` is the sink it pushes the path geometry through.
+        self._routing = RoutingController(
+            navi=navi,
+            camera=self._camera,
+            extent=self._extent,
+            push_geometry=self._set_path_geometry,
+        )
 
         # Build each layer's geometry (QML borrows; the Layer list below holds
         # the Python references that keep them alive).
@@ -254,11 +256,11 @@ class Quick3DGeometryView(QWidget):
             self._push_camera()
             self._camera_dirty = False
         if self._route_dirty:
-            self._update_path()  # recompute waypoints + rebuild path geometry
+            self._routing.recompute()  # A* + rebuild path geometry
             self._route_dirty = False
             self._path_geom_dirty = False
         elif self._path_geom_dirty:
-            self._rebuild_path_geometry()
+            self._routing.rebuild_geometry()  # mag changed; reuse waypoints
             self._path_geom_dirty = False
 
     def _flush_now(self) -> None:
@@ -275,7 +277,7 @@ class Quick3DGeometryView(QWidget):
         w, h = self._view_size()
         self._camera.on_resize(w, h)
         self._camera_dirty = True
-        if self._path_waypoints is not None:
+        if self._routing.has_path:
             self._path_geom_dirty = True
         self._schedule_flush()
 
@@ -288,8 +290,8 @@ class Quick3DGeometryView(QWidget):
             parts.append(f"x: {wx:.2f}   y: {wy:.2f}")
         if self._cursor_nav_id is not None:
             parts.append(f"Nav ID: {self._cursor_nav_id}")
-        if self._path_waypoints is not None:
-            parts.append(f"path length: {self._path_distance:.2f}")
+        if self._routing.has_path:
+            parts.append(f"path length: {self._routing.distance:.2f}")
         self._info_label.setText("    ".join(parts))
 
     def _nav_id_at(self, wx: float, wy: float) -> int | None:
@@ -325,7 +327,7 @@ class Quick3DGeometryView(QWidget):
         w, h = self._view_size()
         self._camera.zoom_by(_WHEEL_ZOOM_FACTOR ** notches, w, h)
         self._camera_dirty = True
-        if self._path_waypoints is not None:
+        if self._routing.has_path:
             self._path_geom_dirty = True  # path width tracks mag
         self._schedule_flush()
 
@@ -351,19 +353,14 @@ class Quick3DGeometryView(QWidget):
         self._flush_now()
 
     def _on_route_start(self, px: float, py: float):
-        if self._navi is None:
+        if not self._routing.enabled:
             return
-        self._dragging = True
-        # A new drag starts a new route — drop the previously drawn path.
-        self._path_waypoints = None
-        self._path_distance = 0.0
-        self._set_path_geometry(None)
         w, h = self._view_size()
-        self._route_from = self._camera.px_to_world(px, py, w, h)
-        self._cursor_xy = self._route_from
-        self._route_to = None
+        world = self._camera.px_to_world(px, py, w, h)
+        # A new drag starts a new route — drops the previously drawn path.
+        self._routing.start(world)
+        self._cursor_xy = world
         self._refresh_info()
-        self._update_path()
 
     def _on_route_move(self, px: float, py: float):
         # QML suppresses the hover signal while LMB is held, so refresh the
@@ -371,65 +368,17 @@ class Quick3DGeometryView(QWidget):
         w, h = self._view_size()
         self._cursor_xy = self._camera.px_to_world(px, py, w, h)
         self._cursor_nav_id = self._nav_id_at(*self._cursor_xy)
-        if self._navi is None or self._route_from is None or not self._dragging:
+        if not self._routing.dragging:
             self._refresh_info()
             return
-        self._route_to = self._cursor_xy
+        self._routing.set_target(self._cursor_xy)
         self._route_dirty = True
         self._schedule_flush()
         self._refresh_info()
 
     def _on_route_end(self):
-        # Don't clear the path — leave it on screen until the next route.
-        self._dragging = False
+        self._routing.end()
         self._flush_now()  # render the final drag target without waiting a frame
-
-    def _update_path(self):
-        if self._navi is None or self._route_from is None or self._route_to is None:
-            return
-        try:
-            if not self._navi.is_routable(self._route_from) or not self._navi.is_routable(
-                self._route_to
-            ):
-                # Endpoint outside the walkable region — drop the path
-                # entirely (matches the old VTK behaviour).
-                self._path_waypoints = None
-                self._path_distance = 0.0
-                self._set_path_geometry(None)
-                return
-            waypoints = self._navi.compute_waypoints(
-                self._route_from, self._route_to
-            )
-        except Exception:
-            self._path_waypoints = None
-            self._path_distance = 0.0
-            self._set_path_geometry(None)
-            return
-
-        self._path_waypoints = list(waypoints)
-        self._path_distance = sum(
-            math.hypot(b[0] - a[0], b[1] - a[1])
-            for a, b in zip(waypoints[:-1], waypoints[1:])
-        )
-        self._rebuild_path_geometry()
-
-    def _path_width_world(self) -> float:
-        """Path thickness in world units, targeting ~2 px on screen — matches
-        the old VTK impl's `SetLineWidth(3)` look (most GL drivers cap line
-        width at 1 px in practice, so the old result was ~1-2 px anyway)."""
-        if self._camera.mag <= 0:
-            return self._extent * 0.002
-        return 2.0 / self._camera.mag
-
-    def _rebuild_path_geometry(self) -> None:
-        if not self._path_waypoints:
-            return
-        geo = build_path_geometry(
-            self._path_waypoints,
-            origin=(self._camera.cx, self._camera.cy),
-            width=self._path_width_world(),
-        )
-        self._set_path_geometry(geo)
 
     def _set_path_geometry(self, geometry):
         # Hold a Python reference (QML side only borrows).
@@ -455,6 +404,6 @@ class Quick3DGeometryView(QWidget):
         else:
             return
         self._camera_dirty = True
-        if self._path_waypoints is not None:
+        if self._routing.has_path:
             self._path_geom_dirty = True
         self._schedule_flush()
