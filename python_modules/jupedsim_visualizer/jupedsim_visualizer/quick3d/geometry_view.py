@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
 )
 
 from jupedsim_visualizer.quick3d.camera import Camera2D
+from jupedsim_visualizer.quick3d.layers import Layer
 from jupedsim_visualizer.quick3d.polygon_geometry import (
     _grid_spacing_for_extent,
     build_grid_geometry,
@@ -80,16 +81,15 @@ class Quick3DGeometryView(QWidget):
         self._path_waypoints: list[tuple[float, float]] | None = None
         self._path_distance = 0.0
 
-        # Geometry objects we hold a reference to (QML borrows).
-        self._wall_geometry = build_polygon_geometry(
-            polygon, origin=(cx, cy)
-        )
-        self._mesh_geometry = None
+        # Build each layer's geometry (QML borrows; the Layer list below holds
+        # the Python references that keep them alive).
+        wall_geometry = build_polygon_geometry(polygon, origin=(cx, cy))
+        mesh_geometry = None
         self._face_polys: list = []
         self._face_tree = None
         if navi is not None:
             verts, polys = navi.mesh()
-            self._mesh_geometry = build_mesh_edges_geometry(
+            mesh_geometry = build_mesh_edges_geometry(
                 verts, polys, origin=(cx, cy)
             )
             # Spatial index so the hover-id lookup is O(log N) per cursor move.
@@ -97,13 +97,12 @@ class Quick3DGeometryView(QWidget):
                 shapely.Polygon([verts[i] for i in face]) for face in polys
             ]
             self._face_tree = shapely.STRtree(self._face_polys)
-        self._path_geometry = None
 
         # Grid overlay: spans the polygon bbox with margin. Spacing follows
         # the legacy VTK grid's power-of-2 rule (see _grid_spacing_for_extent).
         grid_margin = 0.5 * self._extent
         spacing = _grid_spacing_for_extent(self._extent)
-        self._grid_geometry = build_grid_geometry(
+        grid_geometry = build_grid_geometry(
             xmin - grid_margin,
             ymin - grid_margin,
             xmax + grid_margin,
@@ -111,6 +110,18 @@ class Quick3DGeometryView(QWidget):
             spacing,
             origin=(cx, cy),
         )
+
+        # Render layers. Adding an overlay = one Layer here + one Model block
+        # in GeometryScene.qml. The path layer is kept as an attribute because
+        # its geometry is replaced at runtime (see _set_path_geometry); it
+        # hides itself in QML when the geometry is null, so it has no show_prop.
+        self._path_layer = Layer("pathGeometry")
+        self._layers = [
+            Layer("wallGeometry", wall_geometry),  # always shown
+            Layer("gridGeometry", grid_geometry, show_prop="showGrid"),
+            Layer("meshGeometry", mesh_geometry, show_prop="showMesh"),
+            self._path_layer,
+        ]
 
         # QQuickWidget renders the Quick 3D scene to an offscreen FBO and
         # composites it as an ordinary widget. We deliberately do NOT use
@@ -124,12 +135,10 @@ class Quick3DGeometryView(QWidget):
         self._view.setFocusPolicy(Qt.StrongFocus)  # keyboard events reach QML
         self._view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         ctx = self._view.rootContext()
-        ctx.setContextProperty("wallGeometry", self._wall_geometry)
-        ctx.setContextProperty("meshGeometry", self._mesh_geometry)
-        ctx.setContextProperty("pathGeometry", self._path_geometry)
-        ctx.setContextProperty("gridGeometry", self._grid_geometry)
-        ctx.setContextProperty("showMesh", False)
-        ctx.setContextProperty("showGrid", False)
+        for layer in self._layers:
+            ctx.setContextProperty(layer.geometry_prop, layer.geometry)
+            if layer.show_prop is not None:
+                ctx.setContextProperty(layer.show_prop, layer.visible)
         pan_x, pan_y = self._camera.pan
         ctx.setContextProperty("panX", pan_x)
         ctx.setContextProperty("panY", pan_y)
@@ -200,10 +209,17 @@ class Quick3DGeometryView(QWidget):
     # ----- public API -----------------------------------------------------
 
     def show_mesh(self, state: bool) -> None:
-        self._view.rootContext().setContextProperty("showMesh", bool(state))
+        self._set_layer_visible("showMesh", state)
 
     def show_grid(self, state: bool) -> None:
-        self._view.rootContext().setContextProperty("showGrid", bool(state))
+        self._set_layer_visible("showGrid", state)
+
+    def _set_layer_visible(self, show_prop: str, state: bool) -> None:
+        state = bool(state)
+        for layer in self._layers:
+            if layer.show_prop == show_prop:
+                layer.visible = state
+        self._view.rootContext().setContextProperty(show_prop, state)
 
     def reset_camera(self) -> None:
         w, h = self._view_size()
@@ -417,7 +433,7 @@ class Quick3DGeometryView(QWidget):
 
     def _set_path_geometry(self, geometry):
         # Hold a Python reference (QML side only borrows).
-        self._path_geometry = geometry
+        self._path_layer.geometry = geometry
         self._view.rootContext().setContextProperty("pathGeometry", geometry)
 
     def _on_key(self, key: int, text: str):
