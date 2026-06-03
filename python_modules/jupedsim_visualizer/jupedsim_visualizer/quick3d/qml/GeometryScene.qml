@@ -24,8 +24,8 @@ Item {
         anchors.fill: parent
 
         environment: SceneEnvironment {
-            // Match the legacy VTK palette (jupedsim_visualizer.config.Colors).
-            clearColor: "#74a892"   // teal background (Colors.d)
+            // Palette carried over from the original VTK viewer.
+            clearColor: "#74a892"   // teal background
             backgroundMode: SceneEnvironment.Color
             antialiasingMode: SceneEnvironment.MSAA
         }
@@ -43,7 +43,7 @@ Item {
         Model {
             geometry: wallGeometry
             materials: DefaultMaterial {
-                diffuseColor: "#fbf2c4"   // cream fill (Colors.c)
+                diffuseColor: "#fbf2c4"   // cream fill
                 lighting: DefaultMaterial.NoLighting
                 cullMode: Material.NoCulling
             }
@@ -54,7 +54,7 @@ Item {
             geometry: gridGeometry
             visible: showGrid && gridGeometry !== null
             materials: DefaultMaterial {
-                diffuseColor: "#008585"   // dark teal (Colors.e)
+                diffuseColor: "#008585"   // dark teal
                 lighting: DefaultMaterial.NoLighting
             }
         }
@@ -64,7 +64,7 @@ Item {
             geometry: meshGeometry
             visible: showMesh && meshGeometry !== null
             materials: DefaultMaterial {
-                diffuseColor: "#c7522a"   // orange-red edges (Colors.a)
+                diffuseColor: "#c7522a"   // orange-red edges
                 lighting: DefaultMaterial.NoLighting
             }
         }
@@ -74,7 +74,7 @@ Item {
             geometry: agentGeometry
             visible: agentGeometry !== null
             materials: DefaultMaterial {
-                diffuseColor: "#ffb366"   // orange agents (Colors.agent)
+                diffuseColor: "#ffb366"   // orange agents
                 lighting: DefaultMaterial.NoLighting
                 cullMode: Material.NoCulling
             }
