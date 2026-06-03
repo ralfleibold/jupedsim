@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from jupedsim_visualizer.geometry import Geometry
 from jupedsim_visualizer.quick3d.geometry_view import Quick3DGeometryView
+from jupedsim_visualizer.quick3d.replay_view import Quick3DReplayWidget
 from jupedsim_visualizer.replay_widget import ReplayWidget
 from jupedsim_visualizer.trajectory import Trajectory
 from jupedsim_visualizer.view_geometry_widget import ViewGeometryWidget
@@ -52,6 +53,10 @@ class MainWindow(QMainWindow):
         open_wkt_q3d_act.triggered.connect(self._open_wkt_quick3d)
         open_replay_act = open_menu.addAction("Open replay file")
         open_replay_act.triggered.connect(self._open_replay)
+        open_replay_q3d_act = open_menu.addAction(
+            "Open replay file (Quick 3D, preview)"
+        )
+        open_replay_q3d_act.triggered.connect(self._open_replay_quick3d)
         settings_menu = menu.addMenu("Settings")
         self._show_triangulation = settings_menu.addAction("show triangulation")
         self._show_triangulation.setCheckable(True)
@@ -192,6 +197,46 @@ class MainWindow(QMainWindow):
                 self,
                 "Error importing WKT geometry",
                 f"Error importing WKT geometry:\n{e}",
+            )
+            return
+
+    def _open_replay_quick3d(self):
+        base_path_obj = self.settings.value(
+            "files/last_replay_location",
+            type=str,
+            defaultValue=Path("~").expanduser(),
+        )
+        base_path = Path(str(base_path_obj))
+        file, _ = QFileDialog.getOpenFileName(
+            self, caption="Open recording (Quick 3D)", dir=str(base_path)
+        )
+        if not file:
+            return
+        file = Path(file)
+        self.settings.setValue("files/last_replay_location", str(file.parent))
+        try:
+            rec = Recording(file.as_posix())
+            navi = jps.RoutingEngine(rec.geometry())
+            # Preserve window geometry the same way _open_wkt_quick3d does, so
+            # the new tab's sizeHint doesn't shrink the main window.
+            saved_geometry = self.saveGeometry()
+            was_maximized = self.isMaximized()
+            tab = Quick3DReplayWidget(navi, rec, parent=self)
+            tab.show_mesh(self._show_triangulation.isChecked())
+            tab.show_grid(self._show_grid.isChecked())
+            tab_idx = self.tabs.insertTab(0, tab, f"[Q3D] {file.name}")
+            self.tabs.setCurrentIndex(tab_idx)
+            self.restoreGeometry(saved_geometry)
+            if was_maximized:
+                self.showMaximized()
+        except Exception as e:
+            import traceback
+
+            traceback.print_exception(e)
+            QMessageBox.critical(
+                self,
+                "Error importing simulation recording",
+                f"Error importing simulation recording:\n{e}",
             )
             return
 

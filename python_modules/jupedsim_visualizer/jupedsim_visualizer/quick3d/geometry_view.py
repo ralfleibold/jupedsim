@@ -30,6 +30,7 @@ from jupedsim_visualizer.quick3d.camera import Camera2D
 from jupedsim_visualizer.quick3d.layers import Layer
 from jupedsim_visualizer.quick3d.polygon_geometry import (
     _grid_spacing_for_extent,
+    build_agents_geometry,
     build_grid_geometry,
     build_mesh_edges_geometry,
     build_polygon_geometry,
@@ -117,11 +118,16 @@ class Quick3DGeometryView(QWidget):
         # in GeometryScene.qml. The path layer is kept as an attribute because
         # its geometry is replaced at runtime (see _set_path_geometry); it
         # hides itself in QML when the geometry is null, so it has no show_prop.
+        # Agents (replay) layer: like the path layer its geometry is replaced
+        # at runtime (set_agents), starts empty, and hides via the QML
+        # null-check, so it has no show_prop.
+        self._agent_layer = Layer("agentGeometry")
         self._path_layer = Layer("pathGeometry")
         self._layers = [
             Layer("wallGeometry", wall_geometry),  # always shown
             Layer("gridGeometry", grid_geometry, show_prop="showGrid"),
             Layer("meshGeometry", mesh_geometry, show_prop="showMesh"),
+            self._agent_layer,
             self._path_layer,
         ]
 
@@ -215,6 +221,15 @@ class Quick3DGeometryView(QWidget):
 
     def show_grid(self, state: bool) -> None:
         self._set_layer_visible("showGrid", state)
+
+    def set_agents(self, positions: list[tuple[float, float]]) -> None:
+        """Replace the agent disks with one per (x, y) in *positions* (world
+        coords). Used by the replay widget on every frame change. Disks are
+        fixed world-size, so unlike the path they don't rebuild on zoom."""
+        origin = (self._camera.cx, self._camera.cy)
+        geometry = build_agents_geometry(positions, origin=origin)
+        self._agent_layer.geometry = geometry  # keep Python ref alive
+        self._view.rootContext().setContextProperty("agentGeometry", geometry)
 
     def _set_layer_visible(self, show_prop: str, state: bool) -> None:
         state = bool(state)

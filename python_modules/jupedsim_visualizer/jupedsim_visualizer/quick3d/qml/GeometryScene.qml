@@ -69,6 +69,17 @@ Item {
             }
         }
 
+        // Agent disks (replay) overlay (Triangles, z=0.09 baked in).
+        Model {
+            geometry: agentGeometry
+            visible: agentGeometry !== null
+            materials: DefaultMaterial {
+                diffuseColor: "#ffb366"   // orange agents (Colors.agent)
+                lighting: DefaultMaterial.NoLighting
+                cullMode: Material.NoCulling
+            }
+        }
+
         // Routed path overlay (thick triangle strip, z=0.1 baked in).
         Model {
             geometry: pathGeometry

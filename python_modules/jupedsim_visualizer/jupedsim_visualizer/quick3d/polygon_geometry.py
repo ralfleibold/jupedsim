@@ -8,6 +8,7 @@ polygon when constructing.
 """
 from __future__ import annotations
 
+import math
 import struct
 
 import shapely
@@ -228,6 +229,63 @@ def build_path_geometry(
         # Two triangles per segment.
         emit(AL); emit(BL); emit(AR)
         emit(BL); emit(BR); emit(AR)
+
+    bounds = None
+    if xs:
+        bounds = (
+            QVector3D(min(xs), min(ys), z),
+            QVector3D(max(xs), max(ys), z),
+        )
+    return _geometry_from_buffer(
+        buf, QQuick3DGeometry.PrimitiveType.Triangles, bounds
+    )
+
+
+def build_agents_geometry(
+    positions: list[tuple[float, float]],
+    origin: tuple[float, float] = (0.0, 0.0),
+    radius: float = 0.15,
+    z: float = 0.09,
+    segments: int = 20,
+) -> QQuick3DGeometry:
+    """Build a Triangles geometry: one filled disk per agent position.
+
+    All agents are packed into a single mesh (a fan of *segments* triangles
+    each) rather than one Model per agent — a `Repeater3D` over thousands of
+    Models doesn't scale, and the disks share a material anyway. *radius* is
+    world-space (0.15 m, matching the legacy VTK glyph), so disks keep a fixed
+    physical size and don't need rebuilding on zoom. *z* sits just below the
+    routed path (0.1) so a path drawn over agents stays visible."""
+    ox, oy = origin
+    buf = bytearray()
+    nx, ny, nz = 0.0, 0.0, 1.0
+    xs: list[float] = []
+    ys: list[float] = []
+
+    # Unit-circle ring, reused for every agent.
+    ring = [
+        (
+            math.cos(2.0 * math.pi * k / segments),
+            math.sin(2.0 * math.pi * k / segments),
+        )
+        for k in range(segments)
+    ]
+
+    def emit(vx, vy):
+        nonlocal buf
+        buf += struct.pack("<ffffff", vx, vy, z, nx, ny, nz)
+        xs.append(vx)
+        ys.append(vy)
+
+    for px, py in positions:
+        cx = float(px) - ox
+        cy = float(py) - oy
+        for k in range(segments):
+            ux0, uy0 = ring[k]
+            ux1, uy1 = ring[(k + 1) % segments]
+            emit(cx, cy)
+            emit(cx + ux0 * radius, cy + uy0 * radius)
+            emit(cx + ux1 * radius, cy + uy1 * radius)
 
     bounds = None
     if xs:
