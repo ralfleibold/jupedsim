@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from jupedsim_visualizer.quick3d.camera import Camera2D
 from jupedsim_visualizer.quick3d.polygon_geometry import (
     _grid_spacing_for_extent,
     build_grid_geometry,
@@ -59,29 +60,17 @@ class Quick3DGeometryView(QWidget):
         super().__init__(parent)
 
         xmin, ymin, xmax, ymax = polygon.bounds
-        self._cx = (xmin + xmax) / 2.0
-        self._cy = (ymin + ymax) / 2.0
-        self._extent_x = (xmax - xmin) or 1.0
-        self._extent_y = (ymax - ymin) or 1.0
-        self._extent = max(self._extent_x, self._extent_y)  # kept for path width
+        cx = (xmin + xmax) / 2.0
+        cy = (ymin + ymax) / 2.0
+        extent_x = (xmax - xmin) or 1.0
+        extent_y = (ymax - ymin) or 1.0
+        self._extent = max(extent_x, extent_y)  # kept for path width / grid
         self._navi = navi
 
-        # Pan is in the *translated* frame (geometry sits around origin).
-        self._pan_x = 0.0
-        self._pan_y = 0.0
-        # Magnification model:
-        #   mag = base_fit_mag * resize_scale(w/base_w, h/base_h) * user_zoom
-        # The base is snapshot once at first layout; user_zoom is the
-        # accumulated factor from wheel / q / e. The resize_scale is computed
-        # fresh from (current size / base size) every time — no event-to-
-        # event accumulation, so a round-trip back to the base size restores
-        # exactly the original mag (no drift, no matter what path got us
-        # there).
-        self._base_w = 0
-        self._base_h = 0
-        self._base_fit_mag = 1.0
-        self._user_zoom = 1.0
-        self._mag = 1.0
+        # All pan/zoom/mag/fit/px↔world math lives in the camera (see
+        # camera.py). The view only reads the viewport size and pushes the
+        # camera's pan/mag into QML.
+        self._camera = Camera2D(cx, cy, extent_x, extent_y)
 
         # Routing state. `_route_from` / `_route_to` persist across release —
         # the path stays drawn until the user starts a new route.
@@ -93,7 +82,7 @@ class Quick3DGeometryView(QWidget):
 
         # Geometry objects we hold a reference to (QML borrows).
         self._wall_geometry = build_polygon_geometry(
-            polygon, origin=(self._cx, self._cy)
+            polygon, origin=(cx, cy)
         )
         self._mesh_geometry = None
         self._face_polys: list = []
@@ -101,7 +90,7 @@ class Quick3DGeometryView(QWidget):
         if navi is not None:
             verts, polys = navi.mesh()
             self._mesh_geometry = build_mesh_edges_geometry(
-                verts, polys, origin=(self._cx, self._cy)
+                verts, polys, origin=(cx, cy)
             )
             # Spatial index so the hover-id lookup is O(log N) per cursor move.
             self._face_polys = [
@@ -120,7 +109,7 @@ class Quick3DGeometryView(QWidget):
             xmax + grid_margin,
             ymax + grid_margin,
             spacing,
-            origin=(self._cx, self._cy),
+            origin=(cx, cy),
         )
 
         # QQuickWidget renders the Quick 3D scene to an offscreen FBO and
@@ -141,9 +130,10 @@ class Quick3DGeometryView(QWidget):
         ctx.setContextProperty("gridGeometry", self._grid_geometry)
         ctx.setContextProperty("showMesh", False)
         ctx.setContextProperty("showGrid", False)
-        ctx.setContextProperty("panX", self._pan_x)
-        ctx.setContextProperty("panY", self._pan_y)
-        ctx.setContextProperty("viewMag", self._mag)
+        pan_x, pan_y = self._camera.pan
+        ctx.setContextProperty("panX", pan_x)
+        ctx.setContextProperty("panY", pan_y)
+        ctx.setContextProperty("viewMag", self._camera.mag)
         self._view.setSource(QUrl.fromLocalFile(str(_QML_DIR / "GeometryScene.qml")))
 
         # QQuickWidget *is* the rendering widget; no createWindowContainer
@@ -216,9 +206,8 @@ class Quick3DGeometryView(QWidget):
         self._view.rootContext().setContextProperty("showGrid", bool(state))
 
     def reset_camera(self) -> None:
-        self._pan_x = 0.0
-        self._pan_y = 0.0
-        self._mag = self._fit_magnification()
+        w, h = self._view_size()
+        self._camera.reset(w, h)
         self._push_camera()
 
     # ----- camera helpers -------------------------------------------------
@@ -230,23 +219,12 @@ class Quick3DGeometryView(QWidget):
         in that same space, so this works for input math too."""
         return (max(1, self._quick.width()), max(1, self._quick.height()))
 
-    def _fit_magnification(self) -> float:
-        """Pick the largest magnification that still fits both axes of the
-        polygon inside the viewport, with a small margin. Handles non-square
-        polygons in non-square windows correctly — previously we used
-        min(window) / max(extent), which tightly framed the long axis of
-        the polygon against the *short* axis of the window and left
-        unnecessary empty space along the matching dimension."""
-        w, h = self._view_size()
-        mag_w = w / self._extent_x
-        mag_h = h / self._extent_y
-        return min(mag_w, mag_h) * 0.97  # ~3% margin
-
     def _push_camera(self) -> None:
         ctx = self._view.rootContext()
-        ctx.setContextProperty("panX", self._pan_x)
-        ctx.setContextProperty("panY", self._pan_y)
-        ctx.setContextProperty("viewMag", self._mag)
+        pan_x, pan_y = self._camera.pan
+        ctx.setContextProperty("panX", pan_x)
+        ctx.setContextProperty("panY", pan_y)
+        ctx.setContextProperty("viewMag", self._camera.mag)
 
     def _schedule_flush(self) -> None:
         if not self._frame_timer.isActive():
@@ -272,66 +250,14 @@ class Quick3DGeometryView(QWidget):
         self._frame_timer.stop()
         self._flush()
 
-    def _px_to_translated(self, px: float, py: float) -> tuple[float, float]:
-        """View pixel -> world coords in the *translated* (camera) frame.
-        Reverse this with `+ (cx, cy)` to recover original WKT coords."""
-        w, h = self._view_size()
-        dx = (px - w / 2.0) / self._mag
-        dy = -(py - h / 2.0) / self._mag  # screen-y goes down
-        return (self._pan_x + dx, self._pan_y + dy)
-
-    def _to_world(self, tx: float, ty: float) -> tuple[float, float]:
-        return (self._cx + tx, self._cy + ty)
-
-    def _auto_mag(self, w: int, h: int) -> float:
-        """Magnification chosen automatically by the resize logic (i.e.
-        ignoring the user's wheel/key zoom multiplier).
-
-        Behavior the user observed they want:
-          * Both axes grew relative to the base size  →  polygon grows
-            proportionally by the smaller of the two growth ratios.
-          * Only one axis changed (grew *or* shrunk)  →  polygon size
-            unchanged. The empty space along the changing axis just
-            grows/shrinks.
-          * Both axes shrank, or one axis shrank enough that the polygon
-            no longer fits at base size  →  polygon shrinks to fit.
-
-        Achieved as `min( base * max(1, min(rw, rh)), fit(w, h) )`:
-          * `max(1, min(rw, rh))` is 1 unless BOTH axes have grown — so a
-            one-axis change is a no-op for the target.
-          * Capping by `fit(w, h)` enforces no-overflow when the window
-            can no longer hold the polygon at the target mag.
-          * Continuous at every axis-crossing — no jumps.
-          * Stateless w.r.t. the previous event — round-trips can't drift.
-        """
-        rw = w / self._base_w
-        rh = h / self._base_h
-        growth = max(1.0, min(rw, rh))
-        target = self._base_fit_mag * growth
-        fit = min(w / self._extent_x, h / self._extent_y) * 0.97
-        return min(target, fit)
-
-    def _recompute_mag(self) -> None:
-        if self._base_w == 0 or self._base_h == 0:
-            return
-        w, h = self._view_size()
-        # User wheel/key zoom multiplies on top — and is allowed to exceed
-        # the no-overflow cap. Zooming-in past fit is the whole point of
-        # the wheel; the polygon then extends off-screen and the user can
-        # pan to see it.
-        self._mag = self._auto_mag(w, h) * self._user_zoom
-
     def resizeEvent(self, event):
-        """Snapshot the base size on the first real resize; thereafter just
-        recompute the derived mag. Lives on Quick3DGeometryView (a real
-        Python QWidget) — the container returned by `createWindowContainer`
-        is C++-only and won't dispatch resize events back to Python."""
+        """Forward the new size to the camera (first call snapshots the base
+        size; later calls recompute the derived mag), then schedule a render.
+        Lives on Quick3DGeometryView (a real Python QWidget) — the QQuickWidget
+        tracks the layout size, which `_view_size()` reads."""
         super().resizeEvent(event)
         w, h = self._view_size()
-        if self._base_w == 0 or self._base_h == 0:
-            self._base_w, self._base_h = w, h
-            self._base_fit_mag = self._fit_magnification()
-        self._recompute_mag()
+        self._camera.on_resize(w, h)
         self._camera_dirty = True
         if self._path_waypoints is not None:
             self._path_geom_dirty = True
@@ -362,8 +288,8 @@ class Quick3DGeometryView(QWidget):
         return int(hits[0])
 
     def _on_hover_px(self, px: float, py: float):
-        tx, ty = self._px_to_translated(px, py)
-        self._cursor_xy = self._to_world(tx, ty)
+        w, h = self._view_size()
+        self._cursor_xy = self._camera.px_to_world(px, py, w, h)
         self._cursor_nav_id = self._nav_id_at(*self._cursor_xy)
         self._refresh_info()
         self.hovered.emit(*self._cursor_xy)
@@ -380,8 +306,8 @@ class Quick3DGeometryView(QWidget):
         # the world point at the window centre stays at the window centre.
         # We tweak `user_zoom` so the zoom is preserved across resizes.
         notches = delta_y / _WHEEL_NOTCH
-        self._user_zoom *= _WHEEL_ZOOM_FACTOR ** notches
-        self._recompute_mag()
+        w, h = self._view_size()
+        self._camera.zoom_by(_WHEEL_ZOOM_FACTOR ** notches, w, h)
         self._camera_dirty = True
         if self._path_waypoints is not None:
             self._path_geom_dirty = True  # path width tracks mag
@@ -389,7 +315,7 @@ class Quick3DGeometryView(QWidget):
 
     def _on_pan_start(self, px: float, py: float):
         self._pan_anchor_px = (px, py)
-        self._pan_anchor_world = (self._pan_x, self._pan_y)
+        self._pan_anchor_world = self._camera.pan
 
     def _on_pan_move(self, px: float, py: float):
         if self._pan_anchor_px is None or self._pan_anchor_world is None:
@@ -398,10 +324,8 @@ class Quick3DGeometryView(QWidget):
         wx, wy = self._pan_anchor_world
         # Pixel delta -> world delta, inverted (dragging right shows scene
         # moving right, i.e. camera moves left).
-        dx = (px - ax) / self._mag
-        dy = -(py - ay) / self._mag
-        self._pan_x = wx - dx
-        self._pan_y = wy - dy
+        mag = self._camera.mag
+        self._camera.set_pan(wx - (px - ax) / mag, wy + (py - ay) / mag)
         self._camera_dirty = True
         self._schedule_flush()
 
@@ -418,8 +342,8 @@ class Quick3DGeometryView(QWidget):
         self._path_waypoints = None
         self._path_distance = 0.0
         self._set_path_geometry(None)
-        tx, ty = self._px_to_translated(px, py)
-        self._route_from = self._to_world(tx, ty)
+        w, h = self._view_size()
+        self._route_from = self._camera.px_to_world(px, py, w, h)
         self._cursor_xy = self._route_from
         self._route_to = None
         self._refresh_info()
@@ -428,8 +352,8 @@ class Quick3DGeometryView(QWidget):
     def _on_route_move(self, px: float, py: float):
         # QML suppresses the hover signal while LMB is held, so refresh the
         # cursor here too — the user wants to see x/y change during drag.
-        tx, ty = self._px_to_translated(px, py)
-        self._cursor_xy = self._to_world(tx, ty)
+        w, h = self._view_size()
+        self._cursor_xy = self._camera.px_to_world(px, py, w, h)
         self._cursor_nav_id = self._nav_id_at(*self._cursor_xy)
         if self._navi is None or self._route_from is None or not self._dragging:
             self._refresh_info()
@@ -477,16 +401,16 @@ class Quick3DGeometryView(QWidget):
         """Path thickness in world units, targeting ~2 px on screen — matches
         the old VTK impl's `SetLineWidth(3)` look (most GL drivers cap line
         width at 1 px in practice, so the old result was ~1-2 px anyway)."""
-        if self._mag <= 0:
+        if self._camera.mag <= 0:
             return self._extent * 0.002
-        return 2.0 / self._mag
+        return 2.0 / self._camera.mag
 
     def _rebuild_path_geometry(self) -> None:
         if not self._path_waypoints:
             return
         geo = build_path_geometry(
             self._path_waypoints,
-            origin=(self._cx, self._cy),
+            origin=(self._camera.cx, self._camera.cy),
             width=self._path_width_world(),
         )
         self._set_path_geometry(geo)
@@ -497,24 +421,21 @@ class Quick3DGeometryView(QWidget):
         self._view.rootContext().setContextProperty("pathGeometry", geometry)
 
     def _on_key(self, key: int, text: str):
+        w, h = self._view_size()
         if text == "e":
-            self._user_zoom *= _KEY_ZOOM_FACTOR
-            self._recompute_mag()
+            self._camera.zoom_by(_KEY_ZOOM_FACTOR, w, h)
         elif text == "q":
-            self._user_zoom /= _KEY_ZOOM_FACTOR
-            self._recompute_mag()
+            self._camera.zoom_by(1.0 / _KEY_ZOOM_FACTOR, w, h)
         elif text in ("w", "a", "s", "d"):
-            step = (1.0 / self._mag) * (
-                min(*self._view_size()) * _KEY_PAN_FRACTION
-            )
+            step = (1.0 / self._camera.mag) * (min(w, h) * _KEY_PAN_FRACTION)
             if text == "w":
-                self._pan_y += step
+                self._camera.pan_by(0.0, step)
             elif text == "s":
-                self._pan_y -= step
+                self._camera.pan_by(0.0, -step)
             elif text == "a":
-                self._pan_x -= step
+                self._camera.pan_by(-step, 0.0)
             elif text == "d":
-                self._pan_x += step
+                self._camera.pan_by(step, 0.0)
         else:
             return
         self._camera_dirty = True
