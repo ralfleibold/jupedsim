@@ -226,9 +226,13 @@ def build_path_geometry(
         AR = (ax2 - px, ay2 - py)
         BL = (bx2 + px, by2 + py)
         BR = (bx2 - px, by2 - py)
-        # Two triangles per segment.
-        emit(AL); emit(BL); emit(AR)
-        emit(BL); emit(BR); emit(AR)
+        # Two triangles per segment: (AL, BL, AR) and (BL, BR, AR).
+        emit(AL)
+        emit(BL)
+        emit(AR)
+        emit(BL)
+        emit(BR)
+        emit(AR)
 
     bounds = None
     if xs:

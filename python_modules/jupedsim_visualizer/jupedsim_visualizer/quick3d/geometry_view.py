@@ -17,7 +17,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import shapely
-from PySide6.QtCore import Qt, QSize, QTimer, QUrl, Signal
+from PySide6.QtCore import QSize, Qt, QTimer, QUrl, Signal
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import (
     QLabel,
