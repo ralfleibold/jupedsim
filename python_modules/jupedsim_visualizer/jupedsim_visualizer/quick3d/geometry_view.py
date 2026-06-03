@@ -18,7 +18,7 @@ import math
 from pathlib import Path
 
 import shapely
-from PySide6.QtCore import Qt, QSize, QUrl, Signal
+from PySide6.QtCore import Qt, QSize, QTimer, QUrl, Signal
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import (
     QLabel,
@@ -180,6 +180,24 @@ class Quick3DGeometryView(QWidget):
         self._pan_anchor_px: tuple[float, float] | None = None
         self._pan_anchor_world: tuple[float, float] | None = None
 
+        # Frame coalescing. Mouse-move / pan / wheel events arrive faster than
+        # the compositor can usefully render (libinput can fire >100/s), and
+        # every render on QQuickWidget is a full GUI-thread render + FBO
+        # composite. So input handlers only mutate state + set dirty flags;
+        # the actual route recompute + context-property push (which triggers
+        # the render) is flushed at most once per frame by this timer.
+        #   _camera_dirty    -> re-push pan/zoom to QML
+        #   _route_dirty     -> recompute waypoints (A*) + rebuild path
+        #   _path_geom_dirty -> rebuild path geometry only (mag changed; same
+        #                       waypoints) — skipped when _route_dirty covers it
+        self._camera_dirty = False
+        self._route_dirty = False
+        self._path_geom_dirty = False
+        self._frame_timer = QTimer(self)
+        self._frame_timer.setSingleShot(True)
+        self._frame_timer.setInterval(16)  # ~60 Hz cap
+        self._frame_timer.timeout.connect(self._flush)
+
     def sizeHint(self) -> QSize:
         # Without this, QQuickWidget reports a tiny default hint which
         # propagates up through QTabWidget → QMainWindow and causes the
@@ -229,6 +247,30 @@ class Quick3DGeometryView(QWidget):
         ctx.setContextProperty("panX", self._pan_x)
         ctx.setContextProperty("panY", self._pan_y)
         ctx.setContextProperty("viewMag", self._mag)
+
+    def _schedule_flush(self) -> None:
+        if not self._frame_timer.isActive():
+            self._frame_timer.start()
+
+    def _flush(self) -> None:
+        """Apply the latest coalesced state: push the camera and/or rebuild
+        the path. Runs at most once per frame (timer-driven) or immediately
+        at drag/pan end so the final state is never left stale."""
+        if self._camera_dirty:
+            self._push_camera()
+            self._camera_dirty = False
+        if self._route_dirty:
+            self._update_path()  # recompute waypoints + rebuild path geometry
+            self._route_dirty = False
+            self._path_geom_dirty = False
+        elif self._path_geom_dirty:
+            self._rebuild_path_geometry()
+            self._path_geom_dirty = False
+
+    def _flush_now(self) -> None:
+        """Cancel any pending frame and flush synchronously (drag/pan end)."""
+        self._frame_timer.stop()
+        self._flush()
 
     def _px_to_translated(self, px: float, py: float) -> tuple[float, float]:
         """View pixel -> world coords in the *translated* (camera) frame.
@@ -290,9 +332,10 @@ class Quick3DGeometryView(QWidget):
             self._base_w, self._base_h = w, h
             self._base_fit_mag = self._fit_magnification()
         self._recompute_mag()
-        self._push_camera()
+        self._camera_dirty = True
         if self._path_waypoints is not None:
-            self._rebuild_path_geometry()
+            self._path_geom_dirty = True
+        self._schedule_flush()
 
     # ----- event handlers -------------------------------------------------
 
@@ -339,9 +382,10 @@ class Quick3DGeometryView(QWidget):
         notches = delta_y / _WHEEL_NOTCH
         self._user_zoom *= _WHEEL_ZOOM_FACTOR ** notches
         self._recompute_mag()
-        self._push_camera()
+        self._camera_dirty = True
         if self._path_waypoints is not None:
-            self._rebuild_path_geometry()
+            self._path_geom_dirty = True  # path width tracks mag
+        self._schedule_flush()
 
     def _on_pan_start(self, px: float, py: float):
         self._pan_anchor_px = (px, py)
@@ -358,11 +402,13 @@ class Quick3DGeometryView(QWidget):
         dy = -(py - ay) / self._mag
         self._pan_x = wx - dx
         self._pan_y = wy - dy
-        self._push_camera()
+        self._camera_dirty = True
+        self._schedule_flush()
 
     def _on_pan_end(self):
         self._pan_anchor_px = None
         self._pan_anchor_world = None
+        self._flush_now()
 
     def _on_route_start(self, px: float, py: float):
         if self._navi is None:
@@ -389,12 +435,14 @@ class Quick3DGeometryView(QWidget):
             self._refresh_info()
             return
         self._route_to = self._cursor_xy
-        self._update_path()
+        self._route_dirty = True
+        self._schedule_flush()
         self._refresh_info()
 
     def _on_route_end(self):
         # Don't clear the path — leave it on screen until the next route.
         self._dragging = False
+        self._flush_now()  # render the final drag target without waiting a frame
 
     def _update_path(self):
         if self._navi is None or self._route_from is None or self._route_to is None:
@@ -469,6 +517,7 @@ class Quick3DGeometryView(QWidget):
                 self._pan_x += step
         else:
             return
-        self._push_camera()
+        self._camera_dirty = True
         if self._path_waypoints is not None:
-            self._rebuild_path_geometry()
+            self._path_geom_dirty = True
+        self._schedule_flush()
