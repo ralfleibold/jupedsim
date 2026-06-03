@@ -260,6 +260,7 @@ setup(
         "jupedsim.internal",
         "jupedsim.native",
         "jupedsim_visualizer",
+        "jupedsim_visualizer.quick3d",
     ],
     package_dir={
         "jupedsim": "python_modules/jupedsim/jupedsim",
@@ -267,6 +268,12 @@ setup(
         "jupedsim.internal": "python_modules/jupedsim/jupedsim/internal",
         "jupedsim.native": "python_modules/jupedsim/jupedsim/native",
         "jupedsim_visualizer": "python_modules/jupedsim_visualizer/jupedsim_visualizer",
+        "jupedsim_visualizer.quick3d": "python_modules/jupedsim_visualizer/jupedsim_visualizer/quick3d",
+    },
+    # The Quick 3D scene is loaded at runtime via QQuickWidget.setSource, so the
+    # .qml files must ship inside the installed package, not just the .py files.
+    package_data={
+        "jupedsim_visualizer.quick3d": ["qml/*.qml"],
     },
     install_requires=[
         "numpy~=2.2",
