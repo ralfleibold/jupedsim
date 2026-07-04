@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "CfgCgal.hpp"
+#include "Geometry3D.hpp"
+#include "SimulationError.hpp"
 #include "SurfaceMeshShortestPathRoutingEngine.hpp"
 
 #include <CGAL/mark_domain_in_triangulation.h>
@@ -97,7 +99,9 @@ class FlatSquare : public ::testing::Test
 public:
     void SetUp() override
     {
-        engine = std::make_unique<SurfaceMeshShortestPathRoutingEngine>(unit_square_mesh());
+        auto geometry = std::make_unique<Geometry3D>();
+        geometry->initialize_from_mesh(unit_square_mesh());
+        engine = std::make_unique<SurfaceMeshShortestPathRoutingEngine>(std::move(geometry));
     }
 
 protected:
@@ -178,7 +182,9 @@ TEST_F(FlatSquare, OrientationRobustWhenSourceOnEdge)
 
 TEST(RoutingEngine3DFold, GeodesicCarriesLengthAcrossSeam)
 {
-    SurfaceMeshShortestPathRoutingEngine engine{folded_mesh()};
+    auto geometry = std::make_unique<Geometry3D>();
+    geometry->initialize_from_mesh(folded_mesh());
+    SurfaceMeshShortestPathRoutingEngine engine{std::move(geometry)};
 
     const Point3D source{3, 2, 1}; // on the floor
     const Point3D target{4, 13, 5}; // on the ramp, projects to z = 3
@@ -219,7 +225,9 @@ TEST(RoutingEngine3DLShape, GeodesicBendsAroundReflexCorner)
     // L-shape (CCW) with a single reflex corner at (1, 1).
     const std::vector<K::Point_2> outer{{0, 0}, {3, 0}, {3, 1}, {1, 1}, {1, 3}, {0, 3}};
 
-    SurfaceMeshShortestPathRoutingEngine engine{mesh_from_polygon(outer)}; // flat z = 0
+    auto geometry = std::make_unique<Geometry3D>();
+    geometry->initialize_from_mesh(mesh_from_polygon(outer)); // flat z = 0
+    SurfaceMeshShortestPathRoutingEngine engine{std::move(geometry)};
 
     const Point3D source{2.5, 0.5, 1};
     const Point3D target{0.5, 2.5, 1};

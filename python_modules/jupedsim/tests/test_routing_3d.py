@@ -3,14 +3,18 @@ import math
 from pathlib import Path
 
 import pytest
-from jupedsim.internal.routing_3d import SurfaceMeshShortestPathRoutingEngine
+from jupedsim.internal.routing_3d import (
+    Geometry3D,
+    SurfaceMeshShortestPathRoutingEngine,
+)
 
 OBJ = Path(__file__).parents[3] / "examples/geometry/multi_level_u_stair.obj"
 
 
 @pytest.fixture
 def engine():
-    return SurfaceMeshShortestPathRoutingEngine(str(OBJ))
+    e = SurfaceMeshShortestPathRoutingEngine(str(OBJ))
+    return e
 
 
 def test_valid_and_invalid_locations(engine):
@@ -38,6 +42,23 @@ def test_shortest_path_across_stair(engine):
     assert cost == pytest.approx(23.381, abs=1e-3)
     # Minimally it has to be >= direct euclidian distance
     # assert cost >= math.dist(path[0], path[-1])
+
+
+def test_geometry_regions_and_render_data():
+    geo = Geometry3D()
+    geo.initialize_from_obj(str(OBJ))
+    verts = geo.vertices()
+    tris = geo.triangles()
+    ids = geo.region_ids()
+    assert len(verts) > 0
+    assert all(len(v) == 3 for v in verts)
+    assert all(len(t) == 3 for t in tris)
+    # one region id per triangle, in triangle order
+    assert len(ids) == len(tris)
+    # conformally-welded stair: lower floor + whole stair merge into one region,
+    # only the overlapping upper floor splits off -> exactly 2 regions.
+    assert geo.region_count() == 2
+    assert max(ids) == geo.region_count() - 1
 
 
 def test_orientation_is_unit_vector(engine):

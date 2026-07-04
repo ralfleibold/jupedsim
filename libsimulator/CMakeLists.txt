@@ -19,6 +19,8 @@ target_sources(simulator PRIVATE
     src/GeometricFunctions.hpp
     src/Geometry/Validation.cpp
     src/Geometry/Validation.hpp
+    src/Geometry3D.cpp
+    src/Geometry3D.hpp
     src/GeometryBuilder.cpp
     src/GeometryBuilder.hpp
     src/Graph.hpp
@@ -42,6 +44,8 @@ target_sources(simulator PRIVATE
     src/Point.hpp
     src/Polygon.cpp
     src/Polygon.hpp
+    src/RegionSplit.cpp
+    src/RegionSplit.hpp
     src/Routing.cpp
     src/Routing.hpp
     src/RoutingEngine.cpp
@@ -114,6 +118,7 @@ if (BUILD_TESTS)
         test/TestMesh.cpp
         test/TestNeighborhoodSearch.cpp
         test/TestPoint.cpp
+        test/TestRegionSplit.cpp
         test/TestRoutingEngine3D.cpp
         test/TestSimulationClock.cpp
         test/TestStage.cpp
