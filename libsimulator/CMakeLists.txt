@@ -117,6 +117,7 @@ if (BUILD_TESTS)
         test/TestLineSegment.cpp
         test/TestMesh.cpp
         test/TestNeighborhoodSearch.cpp
+        test/TestNeighborhoodSearch3D.cpp
         test/TestPoint.cpp
         test/TestRegionSplit.cpp
         test/TestRoutingEngine3D.cpp
