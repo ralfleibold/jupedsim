@@ -74,6 +74,8 @@ target_sources(simulator PRIVATE
     src/Tracing.hpp
     src/UniqueID.hpp
     src/Util.hpp
+    src/WallIndex.cpp
+    src/WallIndex.hpp
 )
 
 add_subdirectory(src/OperationalModels)
@@ -124,6 +126,7 @@ if (BUILD_TESTS)
         test/TestSimulationClock.cpp
         test/TestStage.cpp
         test/TestUniqueID.cpp
+        test/TestWallIndex.cpp
     )
 
     target_link_libraries(libsimulator-tests PRIVATE
