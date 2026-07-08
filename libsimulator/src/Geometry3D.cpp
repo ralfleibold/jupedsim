@@ -7,8 +7,12 @@
 #include <CGAL/boost/graph/IO/polygon_mesh_io.h>
 #include <CGAL/boost/graph/helpers.h>
 
+#include <array>
+#include <cassert>
+#include <iterator>
 #include <utility>
 #include <variant>
+#include <vector>
 
 void Geometry3D::initialize_from_obj(const std::string& path)
 {
@@ -58,15 +62,35 @@ Geometry3D::FaceLocation Geometry3D::face_below(const Point3D& p) const
         return {SurfaceMesh::null_face(), SurfaceKernel::Point_3{}};
     }
     const auto* projected = std::get_if<SurfaceKernel::Point_3>(&hit->first);
-    if(!projected) {
-        return {SurfaceMesh::null_face(), SurfaceKernel::Point_3{}};
-    }
+    // Assert against vertical faces.
+    assert(projected && "FATAL: vertical face hit by the face_below line");
     return {hit->second, *projected};
 }
 
 bool Geometry3D::is_valid_location(const Point3D& p) const
 {
     return face_below(p).face != SurfaceMesh::null_face();
+}
+
+Geometry3D::FaceLocation
+Geometry3D::locate_in_region(std::size_t region_id, const Point2D& xy) const
+{
+    // All intersections along -z. Search for the one with the region_id.
+    const SurfaceKernel::Line_3 vertical(
+        Point3D{xy.x(), xy.y(), 0}, SurfaceKernel::Direction_3(0, 0, 1));
+    std::vector<AABBTree::Intersection_and_primitive_id<SurfaceKernel::Line_3>::Type> hits{};
+    aabb_tree().all_intersections(vertical, std::back_inserter(hits));
+
+    for(const auto& [where, face] : hits) {
+        if(_region[face] != region_id) {
+            continue;
+        }
+        const auto* point = std::get_if<Point3D>(&where);
+        // Assert against vertical faces.
+        assert(point && "FATAL: vertical face hit by the locate line");
+        return {face, *point};
+    }
+    return {SurfaceMesh::null_face(), Point3D{}};
 }
 
 std::vector<std::size_t> Geometry3D::region_ids() const

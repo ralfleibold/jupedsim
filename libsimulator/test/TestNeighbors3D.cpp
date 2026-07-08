@@ -1,10 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//
-// Integration of the two 3D-neighborhood building blocks: the broad-phase grid
-// (NeighborhoodSearch3D) narrowed by all three guards (horizontal radius,
-// vertical band, and wall visibility via WallIndex). Milestone 2 built the wall
-// query; this proves it composes into the correct neighbor set before a real
-// model wires it in.
+#include "Geometry3D.hpp"
 #include "NeighborhoodSearch3D.hpp"
 #include "WallIndex.hpp"
 
@@ -68,6 +63,33 @@ SurfaceMesh bridge_at(double z)
     SurfaceMesh mesh{};
     add_quad(mesh, {Point3D{4, 0, z}, {6, 0, z}, {6, 10, z}, {4, 10, z}});
     return mesh;
+}
+
+/// Two floors over the same [0,10]x[0,10] footprint, `gap` apart in z. Their
+/// (x,y) projections coincide, so only the derived z can tell them apart.
+SurfaceMesh stacked_floors(double gap)
+{
+    SurfaceMesh mesh{};
+    add_quad(mesh, {Point3D{0, 0, 0}, {10, 0, 0}, {10, 10, 0}, {0, 10, 0}});
+    add_quad(mesh, {Point3D{0, 0, gap}, {10, 0, gap}, {10, 10, gap}, {0, 10, gap}});
+    return mesh;
+}
+
+/// Simulate an agent with just position which now contains the region as well.
+struct FakeAgent {
+    std::size_t region;
+    Point2D xy;
+};
+
+std::vector<Point3D>
+get_points_in_region(const Geometry3D& geo, const std::vector<FakeAgent>& agents)
+{
+    std::vector<Point3D> out{};
+    out.reserve(agents.size());
+    for(const auto& a : agents) {
+        out.push_back(geo.locate_in_region(a.region, a.xy).point);
+    }
+    return out;
 }
 
 /// broad filtering followed by all "narrowing" filters:
@@ -167,4 +189,41 @@ TEST(Neighbors3D, BridgeAboveDoesNotSeparateGroundNeighbors)
     // The 2D line crosses the bridge borders, but they are 3 m above -> no block.
     EXPECT_EQ(
         neighbors(search, walls, positions, positions[0], 5.0, 2.2), (std::set<std::size_t>{0, 1}));
+}
+
+TEST(Neighbors3D, DerivedHeightSeparatesStackedFloors)
+{
+    Geometry3D geo{};
+    geo.initialize_from_mesh(stacked_floors(3.0));
+    ASSERT_EQ(geo.region_count(), 2);
+    const WallIndex walls{geo.mesh()};
+
+    // Agents 0 and 1 share (x,y) on different floors; agent 2 is next to 0.
+    const std::vector<FakeAgent> agents{{0, {5, 5}}, {1, {5, 5}}, {0, {6, 5}}};
+    const auto positions = get_points_in_region(geo, agents);
+    NeighborhoodSearch3D search{2.0};
+    search.rebuild_index(positions);
+
+    // The stacked agent (dz=3) drops out, the one on same region (dz=0) stays.
+    EXPECT_EQ(
+        neighbors(search, walls, positions, positions[0], 2.5, 2.2), (std::set<std::size_t>{0, 2}));
+}
+
+TEST(Neighbors3D, CloseAgentsOnDifferentRegionsStayNeighbors)
+{
+    Geometry3D geo{};
+    geo.initialize_from_mesh(stacked_floors(0.5));
+    ASSERT_EQ(geo.region_count(), 2);
+    const WallIndex walls{geo.mesh()};
+
+    // Same (x,y), different regions, but only 0.5 m apart in z.
+    const std::vector<FakeAgent> agents{{0, {5, 5}}, {1, {5, 5}}};
+    const auto positions = get_points_in_region(geo, agents);
+    NeighborhoodSearch3D search{2.0};
+    search.rebuild_index(positions);
+
+    // The differing region id must NOT gate neighborhood: the small dz keeps them
+    // neighbors. Contrast with the dz=3 case above -- only the z band decides.
+    EXPECT_EQ(
+        neighbors(search, walls, positions, positions[0], 2.5, 2.2), (std::set<std::size_t>{0, 1}));
 }

@@ -49,6 +49,11 @@ public:
     /// `null_face()` if the ray misses the walkable surface.
     FaceLocation face_below(const Point3D& p) const;
 
+    /// Locate @p xy within region @p region_id: the face of that region whose
+    /// (x,y)-projection contains @p xy, and the on-surface point (its z on that
+    /// face's plane). `null_face()` if @p xy is outside the region's footprint.
+    FaceLocation locate_in_region(std::size_t region_id, const Point2D& xy) const;
+
     /// True iff @p p projects (along -z) onto the walkable surface.
     bool is_valid_location(const Point3D& p) const;
 

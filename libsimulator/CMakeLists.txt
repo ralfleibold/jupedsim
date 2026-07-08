@@ -114,6 +114,7 @@ if (BUILD_TESTS)
         test/TestCollisionGeometry.cpp
         test/TestCustomModel.cpp
         test/TestGenericAgentFormatter.cpp
+        test/TestGeometry3D.cpp
         test/TestGraph.cpp
         test/TestJourney.cpp
         test/TestLineSegment.cpp
