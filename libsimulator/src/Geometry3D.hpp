@@ -54,12 +54,27 @@ public:
     /// face's plane). `null_face()` if @p xy is outside the region's footprint.
     FaceLocation locate_in_region(std::size_t region_id, const Point2D& xy) const;
 
+    /// Re-anchor a horizontal move onto the 3D surface: @p from is in region
+    /// @p from_region_id; return the face and on-surface point at @p to. The
+    /// move is always a direct step, never around corners. Because the agent
+    /// step is small relative to the triangle edge length, @p to lies in the
+    /// start face or one directly touching it (its vertex 1-ring); using the
+    /// surface neighbourhood -- not (x,y) alone -- selects the correct sheet
+    /// where regions overlap (a floor passing under an upper storey). Throws if
+    /// @p to is in none of them (step too large for the mesh resolution, or off
+    /// the walkable area).
+    FaceLocation
+    walk_on_surface(std::size_t from_region_id, const Point2D& from, const Point2D& to) const;
+
     /// True iff @p p projects (along -z) onto the walkable surface.
     bool is_valid_location(const Point3D& p) const;
 
     // -- region overlay & render data (see split_into_regions) --------------
 
     std::size_t region_count() const { return _regionCount; }
+
+    /// Region id (0-based) of a single face, as assigned by the region overlay.
+    std::size_t region_of(SurfaceMesh::Face_index face) const { return _region[face]; }
 
     /// One 0-based region id per triangle, in mesh face order.
     std::vector<std::size_t> region_ids() const;

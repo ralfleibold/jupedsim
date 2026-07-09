@@ -14,6 +14,46 @@
 #include <variant>
 #include <vector>
 
+namespace
+{
+/// The on-surface 3D point of face @p f at (x,y) @p q. @p q is assumed inside
+/// f's (x,y) projection. z is the barycentric blend of the vertices' heights:
+/// find q's weights in the projected triangle, then interpolate z.
+Point3D point_on_face(const SurfaceMesh& mesh, SurfaceMesh::Face_index f, const Point2D& q)
+{
+    std::array<Point3D, 3> v{};
+    int i = 0;
+    for(const auto vh : CGAL::vertices_around_face(mesh.halfedge(f), mesh)) {
+        v[i++] = mesh.point(vh);
+    }
+    const double e1x = v[1].x() - v[0].x();
+    const double e1y = v[1].y() - v[0].y();
+    const double e2x = v[2].x() - v[0].x();
+    const double e2y = v[2].y() - v[0].y();
+    const double qx = q.x() - v[0].x();
+    const double qy = q.y() - v[0].y();
+    const double denom = e1x * e2y - e2x * e1y; // 2*signed area; != 0 unless f is vertical
+    assert(denom != 0.0 && "FATAL: vertical face in point_on_face");
+    const double b1 = (qx * e2y - e2x * qy) / denom;
+    const double b2 = (e1x * qy - qx * e1y) / denom;
+    const double z = (1.0 - b1 - b2) * v[0].z() + b1 * v[1].z() + b2 * v[2].z();
+    return Point3D{q.x(), q.y(), z};
+}
+
+/// True iff (x,y) point @p q lies in face @p f's (x,y) footprint (inside or on
+/// its boundary).
+bool face_covers(const SurfaceMesh& mesh, SurfaceMesh::Face_index f, const Point2D& q)
+{
+    std::array<Point2D, 3> p{};
+    int i = 0;
+    for(const auto v : CGAL::vertices_around_face(mesh.halfedge(f), mesh)) {
+        const auto& s = mesh.point(v);
+        p[i++] = Point2D{s.x(), s.y()};
+    }
+    return SurfaceKernel::Triangle_2(p[0], p[1], p[2]).bounded_side(q) != CGAL::ON_UNBOUNDED_SIDE;
+}
+} // namespace
+
 void Geometry3D::initialize_from_obj(const std::string& path)
 {
     SurfaceMesh mesh{};
@@ -67,6 +107,40 @@ Geometry3D::FaceLocation Geometry3D::face_below(const Point3D& p) const
     return {hit->second, *projected};
 }
 
+Geometry3D::FaceLocation Geometry3D::walk_on_surface(
+    std::size_t from_region_id,
+    const Point2D& from,
+    const Point2D& to) const
+{
+    const auto start = locate_in_region(from_region_id, from).face;
+    if(start == SurfaceMesh::null_face()) {
+        throw SimulationError("walk_on_surface(): Invalid 'from'");
+    }
+
+    // A single agent step is assumed small relative to the triangle edge length,
+    // so 'to' lies in the start face or one directly touching it (its vertex
+    // 1-ring). Restricting to that surface neighbourhood -- rather than any
+    // face whose (x,y) footprint contains 'to' -- is what keeps the agent on
+    // the right sheet where regions overlap.
+    if(face_covers(_mesh, start, to)) {
+        return {start, point_on_face(_mesh, start, to)};
+    }
+    for(const auto v : CGAL::vertices_around_face(_mesh.halfedge(start), _mesh)) {
+        for(const auto f : CGAL::faces_around_target(_mesh.halfedge(v), _mesh)) {
+            if(f == SurfaceMesh::null_face() || f == start) {
+                continue;
+            }
+            if(face_covers(_mesh, f, to)) {
+                return {f, point_on_face(_mesh, f, to)};
+            }
+        }
+    }
+    // TODO: 'to' is neither in the start face nor a direct neighbour.
+    //        This indicates a "manual" override to position that is larger than
+    //        expected. We need to see how to deal with this. Right now it is an error.
+    throw SimulationError("walk_on_surface(): 'to' is not in the start face or its neighbourhood");
+}
+
 bool Geometry3D::is_valid_location(const Point3D& p) const
 {
     return face_below(p).face != SurfaceMesh::null_face();
@@ -75,7 +149,7 @@ bool Geometry3D::is_valid_location(const Point3D& p) const
 Geometry3D::FaceLocation
 Geometry3D::locate_in_region(std::size_t region_id, const Point2D& xy) const
 {
-    // All intersections along -z. Search for the one with the region_id.
+    // All intersections along z. Search for the one with the region_id.
     const SurfaceKernel::Line_3 vertical(
         Point3D{xy.x(), xy.y(), 0}, SurfaceKernel::Direction_3(0, 0, 1));
     std::vector<AABBTree::Intersection_and_primitive_id<SurfaceKernel::Line_3>::Type> hits{};
