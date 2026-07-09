@@ -49,20 +49,32 @@ SurfaceMesh ramp()
     add_quad(mesh, {Point3D{5, 0, 0}, {15, 0, 0}, {15, 10, 4}, {5, 10, 4}});
     return mesh;
 }
+
+/// A flat floor [0,10]x[0,4] at z=0, plus a separate ramp sheet floating just
+/// above it, covering the floor's right border (x=10, y in [1,3]). The ramp
+/// climbs from z=0.05 at x=12 to z=2.0 at x=8, so above the x=10 border it sits
+/// ~1 m up. This should not act as a "wall" for agents on the ramp.
+SurfaceMesh floor_under_ramp()
+{
+    SurfaceMesh mesh{};
+    add_quad(mesh, {Point3D{0, 0, 0}, {10, 0, 0}, {10, 4, 0}, {0, 4, 0}});
+    add_quad(mesh, {Point3D{8, 1, 2.0}, {12, 1, 0.05}, {12, 3, 0.05}, {8, 3, 2.0}});
+    return mesh;
+}
 } // namespace
 
 TEST(WallIndex, FlatRoomHasItsFourWalls)
 {
     const WallIndex index{flat_room()};
-    EXPECT_EQ(index.segments().size(), 4);
+    EXPECT_EQ(index.wall_count(), 4);
 }
 
 TEST(WallIndex, SegmentsNearReturnsOnlyWallsInRadius)
 {
     const WallIndex index{flat_room()};
-    EXPECT_EQ(index.segments_near({1, 5, 0}, 2.0, 2.2).size(), 1);
-    EXPECT_TRUE(index.segments_near({5, 5, 0}, 2.0, 2.2).empty()); // center
-    EXPECT_EQ(index.segments_near({5, 5, 0}, 6.0, 2.2).size(), 4); // large radius
+    EXPECT_EQ(index.get_near_walls({1, 5, 0}, 2.0, 2.2).size(), 1);
+    EXPECT_TRUE(index.get_near_walls({5, 5, 0}, 2.0, 2.2).empty()); // center
+    EXPECT_EQ(index.get_near_walls({5, 5, 0}, 6.0, 2.2).size(), 4); // large radius
 }
 
 TEST(WallIndex, WallBetweenRoomsBreaksVisibility)
@@ -92,10 +104,10 @@ TEST(WallIndex, PathCollinearlyUnderBridgeBorderStaysVisible)
 TEST(WallIndex, BridgeAboveIsNoWallForGroundAgents)
 {
     // Similar to "BridgeAboveDoesNotOccludeGroundPath", but not for is_visibile()
-    // but for segments_near()
+    // but for get_near_walls()
     const WallIndex index{bridge_at(3.0)};
-    EXPECT_TRUE(index.segments_near({5, 5, 0}, 3.0, 2.2).empty());
-    EXPECT_EQ(index.segments_near({5, 5, 3}, 3.0, 2.2).size(), 2);
+    EXPECT_TRUE(index.get_near_walls({5, 5, 0}, 3.0, 2.2).empty());
+    EXPECT_EQ(index.get_near_walls({5, 5, 3}, 3.0, 2.2).size(), 2);
 }
 
 TEST(WallIndex, VisibilityUsesInterpolatedEdgeHeight)
@@ -111,7 +123,26 @@ TEST(WallIndex, SegmentsNearUsesInterpolatedFootpointHeight)
 {
     const WallIndex index{ramp()};
     // Low end of the ramp is treated as a wall.
-    EXPECT_EQ(index.segments_near({4, 2, 0}, 1.2, 2.2).size(), 1);
+    EXPECT_EQ(index.get_near_walls({4, 2, 0}, 1.2, 2.2).size(), 1);
     // Near its high end it is no wall anymore.
-    EXPECT_TRUE(index.segments_near({4, 9, 0}, 1.2, 2.2).empty());
+    EXPECT_TRUE(index.get_near_walls({4, 9, 0}, 1.2, 2.2).empty());
+}
+
+TEST(WallIndex, RampAboveNeutralizesOnlyTheCoveredPartOfAWall)
+{
+    const WallIndex index{floor_under_ramp()};
+    // Under the ramp (y=2) the x=10 border is a cut artifact -> agents see across.
+    EXPECT_TRUE(index.is_visible({9, 2, 0}, {11, 2, 0}, 2.2));
+    // Beside the ramp (y=0.5) the SAME border has open air above and still
+    // blocks: only the covered stretch is neutralized, not the whole edge.
+    EXPECT_FALSE(index.is_visible({9, 0.5, 0}, {11, 0.5, 0}, 2.2));
+}
+
+TEST(WallIndex, RepulsionKeepsTheUncoveredPartOfAPartlyCoveredWall)
+{
+    const WallIndex index{floor_under_ramp()};
+    // Under the ramp: no wall repulsion (cut artifact).
+    EXPECT_TRUE(index.get_near_walls({9.7, 2, 0}, 0.5, 2.2).empty());
+    // Beside the ramp: the uncovered stretch of the same border still repels.
+    EXPECT_FALSE(index.get_near_walls({9.7, 0.5, 0}, 0.5, 2.2).empty());
 }

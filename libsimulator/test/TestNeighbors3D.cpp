@@ -108,7 +108,7 @@ std::set<std::size_t> neighbors(
     auto passes = [positions,
                    g1 = within_horizontal_distance(p, radius),
                    g2 = within_vertical_band(p, height),
-                   g3 = walls.visible_from(p, height)](std::size_t i) {
+                   g3 = walls.is_visible_from(p, height)](std::size_t i) {
         return g1(positions[i]) && g2(positions[i]) && g3(positions[i]);
     };
     auto matches = search.candidates(p, radius, height) | std::views::filter(passes);
@@ -140,8 +140,8 @@ TEST(Neighbors3D, PartitionedFlatRoomMatchesUnpartitioned)
 
     const WallIndex whole{flat_room()};
     const WallIndex split{partitioned_flat_room()};
-    ASSERT_EQ(whole.segments().size(), 4);
-    ASSERT_EQ(split.segments().size(), 6); // outer boundary only
+    ASSERT_EQ(whole.wall_count(), 4);
+    ASSERT_EQ(split.wall_count(), 6); // outer boundary only
     constexpr double radius = 2.5;
     constexpr double height = 2.2;
 
@@ -169,7 +169,7 @@ TEST(Neighbors3D, WallBetweenRoomsRemovesCrossNeighbors)
     EXPECT_EQ(
         oracle_no_walls(positions, positions[0], radius, height),
         (std::set<std::size_t>{0, 1, 2, 3}));
-    // Adding the "visible_from"-filter drops the ones crossing the gap
+    // Adding the "is_visible_from"-filter drops the ones crossing the gap
     EXPECT_EQ(
         neighbors(search, walls, positions, positions[0], radius, height),
         (std::set<std::size_t>{0, 1}));
