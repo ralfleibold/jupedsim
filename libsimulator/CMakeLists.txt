@@ -26,6 +26,9 @@ target_sources(simulator PRIVATE
     src/Graph.hpp
     src/Grid2D.hpp
     src/HashCombine.hpp
+    src/InformationForUpdate.hpp
+    src/InformationGatherer3D.cpp
+    src/InformationGatherer3D.hpp
     src/IteratorPair.hpp
     src/Journey.cpp
     src/Journey.hpp

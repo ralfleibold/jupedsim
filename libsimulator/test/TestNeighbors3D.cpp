@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
+#include "GenericAgent.hpp"
 #include "Geometry3D.hpp"
+#include "InformationForUpdate.hpp"
+#include "InformationGatherer3D.hpp"
 #include "NeighborhoodSearch3D.hpp"
 #include "WallIndex.hpp"
 
 #include <gtest/gtest.h>
 
 #include <array>
+#include <cmath>
 #include <ranges>
 #include <set>
 #include <span>
@@ -226,4 +230,177 @@ TEST(Neighbors3D, CloseAgentsOnDifferentRegionsStayNeighbors)
     // neighbors. Contrast with the dz=3 case above -- only the z band decides.
     EXPECT_EQ(
         neighbors(search, walls, positions, positions[0], 2.5, 2.2), (std::set<std::size_t>{0, 1}));
+}
+
+namespace
+{
+/// The flat_room with a bridge deck spanning x in [4,6] at height @p z: two
+/// walkable sheets over the same strip, in one mesh.
+SurfaceMesh flat_room_with_bridge(double z)
+{
+    SurfaceMesh mesh{};
+    add_quad(mesh, {Point3D{0, 0, 0}, {10, 0, 0}, {10, 10, 0}, {0, 10, 0}});
+    add_quad(mesh, {Point3D{4, 0, z}, {6, 0, z}, {6, 10, z}, {4, 10, z}});
+    return mesh;
+}
+
+GenericAgent make_agent(const Point& pos)
+{
+    return GenericAgent(
+        GenericAgent::ID::Invalid,
+        jps::UniqueID<Journey>::Invalid,
+        jps::UniqueID<BaseStage>::Invalid,
+        pos,
+        CollisionFreeSpeedModelData{});
+}
+
+/// On-surface anchor of the sheet at height @p z covering @p xy.
+Point3D anchor_at_height(const Geometry3D& geo, const Point2D& xy, double z)
+{
+    for(std::size_t region = 0; region < geo.region_count(); ++region) {
+        const auto loc = geo.locate_in_region(region, xy);
+        if(loc.face != SurfaceMesh::null_face() && std::abs(loc.point.z() - z) < 1e-9) {
+            return loc.point;
+        }
+    }
+    ADD_FAILURE() << "no sheet at (" << xy << ", z=" << z << ")";
+    return {};
+}
+
+std::set<GenericAgent::ID> neighbor_ids(const InformationForUpdate& info)
+{
+    std::set<GenericAgent::ID> ids{};
+    for(const auto& neighbor : info.neighbors) {
+        ids.insert(neighbor.id);
+    }
+    return ids;
+}
+} // namespace
+
+TEST(InformationGatherer3D, NeighborsWithinRadiusIncludingSelf)
+{
+    Geometry3D geo{};
+    geo.initialize_from_mesh(flat_room());
+
+    AgentContainer<GenericAgent> agents{};
+    agents.push_back(make_agent({2, 2}));
+    agents.push_back(make_agent({3, 2}));
+    agents.push_back(make_agent({8, 8}));
+    std::vector<Point3D> positions{{2, 2, 0}, {3, 2, 0}, {8, 8, 0}};
+
+    InformationGatherer3D gatherer{geo, 2.0, 2.2};
+    gatherer.update(agents, std::move(positions));
+
+    std::vector<LineSegment> walls{};
+    const auto info = gatherer.gather(0, {.neighborRadius = 2.}, walls);
+    EXPECT_EQ(neighbor_ids(info), (std::set<GenericAgent::ID>{agents[0].id, agents[1].id}));
+    EXPECT_TRUE(info.walls.empty());
+}
+
+TEST(InformationGatherer3D, StackedFloorsSeparateNeighborsByHeight)
+{
+    Geometry3D geo{};
+    geo.initialize_from_mesh(stacked_floors(3.0));
+
+    // Agents 0 and 1 share (x,y) on different floors; agent 2 is next to 0.
+    AgentContainer<GenericAgent> agents{};
+    agents.push_back(make_agent({5, 5}));
+    agents.push_back(make_agent({5, 5}));
+    agents.push_back(make_agent({6, 5}));
+    std::vector<Point3D> positions{
+        anchor_at_height(geo, {5, 5}, 0),
+        anchor_at_height(geo, {5, 5}, 3),
+        anchor_at_height(geo, {6, 5}, 0)};
+
+    InformationGatherer3D gatherer{geo, 2.0, 2.2};
+    gatherer.update(agents, std::move(positions));
+
+    std::vector<LineSegment> walls{};
+    const auto info = gatherer.gather(0, {.neighborRadius = 2.5}, walls);
+    EXPECT_EQ(neighbor_ids(info), (std::set<GenericAgent::ID>{agents[0].id, agents[2].id}));
+}
+
+TEST(InformationGatherer3D, CloseAgentsOnDifferentRegionsStayNeighbors)
+{
+    Geometry3D geo{};
+    geo.initialize_from_mesh(stacked_floors(0.5));
+
+    // Same (x,y), different regions, only 0.5 m apart in z: the z band keeps
+    // them neighbors, the differing region id does not gate anything.
+    AgentContainer<GenericAgent> agents{};
+    agents.push_back(make_agent({5, 5}));
+    agents.push_back(make_agent({5, 5}));
+    std::vector<Point3D> positions{
+        anchor_at_height(geo, {5, 5}, 0), anchor_at_height(geo, {5, 5}, 0.5)};
+
+    InformationGatherer3D gatherer{geo, 2.0, 2.2};
+    gatherer.update(agents, std::move(positions));
+
+    std::vector<LineSegment> walls{};
+    const auto info = gatherer.gather(0, {.neighborRadius = 2.5}, walls);
+    EXPECT_EQ(neighbor_ids(info), (std::set<GenericAgent::ID>{agents[0].id, agents[1].id}));
+}
+
+TEST(InformationGatherer3D, WallsAreProjectedTo2D)
+{
+    Geometry3D geo{};
+    geo.initialize_from_mesh(two_rooms_with_gap());
+
+    // Agent in the left room, 0.5 m from its right border at x=4. Radius 1
+    // reaches only that border; the other room walls are out of range.
+    AgentContainer<GenericAgent> agents{};
+    agents.push_back(make_agent({3.5, 5}));
+    std::vector<Point3D> positions{anchor_at_height(geo, {3.5, 5}, 0)};
+
+    InformationGatherer3D gatherer{geo, 2.0, 2.2};
+    gatherer.update(agents, std::move(positions));
+
+    std::vector<LineSegment> walls{};
+    const auto info = gatherer.gather(0, {.wallRadius = 1.}, walls);
+    ASSERT_FALSE(info.walls.empty());
+    for(const auto& wall : info.walls) {
+        EXPECT_NEAR(wall.p1.x, 4.0, 1e-9);
+        EXPECT_NEAR(wall.p2.x, 4.0, 1e-9);
+    }
+    EXPECT_TRUE(info.neighbors.empty());
+}
+
+TEST(InformationGatherer3D, WallsOutsideVerticalBandAreSkipped)
+{
+    Geometry3D geo{};
+    geo.initialize_from_mesh(flat_room_with_bridge(3.0));
+    ASSERT_EQ(geo.region_count(), 2);
+
+    // Ground agent below the bridge: the bridge borders are 1 m away in (x,y)
+    // but 3 m up -- outside the vertical band. The room borders are 5 m away
+    // -- outside the radius.
+    AgentContainer<GenericAgent> agents{};
+    agents.push_back(make_agent({5, 5}));
+    std::vector<Point3D> positions{anchor_at_height(geo, {5, 5}, 0)};
+
+    InformationGatherer3D gatherer{geo, 2.0, 2.2};
+    gatherer.update(agents, std::move(positions));
+
+    std::vector<LineSegment> walls{};
+    const auto info = gatherer.gather(0, {.wallRadius = 2.}, walls);
+    EXPECT_TRUE(info.walls.empty());
+}
+
+TEST(InformationGatherer3D, NothingRequestedComputesNothing)
+{
+    Geometry3D geo{};
+    geo.initialize_from_mesh(flat_room());
+
+    AgentContainer<GenericAgent> agents{};
+    agents.push_back(make_agent({2, 2}));
+    agents.push_back(make_agent({2.5, 2}));
+    std::vector<Point3D> positions{{2, 2, 0}, {2.5, 2, 0}};
+
+    InformationGatherer3D gatherer{geo, 2.0, 2.2};
+    gatherer.update(agents, std::move(positions));
+
+    std::vector<LineSegment> walls{};
+    const auto info = gatherer.gather(0, {}, walls);
+    EXPECT_TRUE(info.neighbors.empty());
+    EXPECT_TRUE(info.walls.empty());
 }

@@ -1,0 +1,60 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+#include "InformationGatherer3D.hpp"
+
+#include "Geometry3D.hpp"
+
+#include <cassert>
+#include <span>
+#include <utility>
+
+InformationGatherer3D::InformationGatherer3D(
+    const Geometry3D& geometry,
+    double cellSize,
+    double height)
+    : _wallIndex(geometry.mesh()), _search(cellSize), _height(height)
+{
+}
+
+void InformationGatherer3D::update(
+    const AgentContainer<GenericAgent>& agents,
+    std::vector<Point3D> positions)
+{
+    assert(agents.size() == positions.size());
+    _agents = &agents;
+    _positions = std::move(positions);
+    _search.rebuild_index(_positions);
+}
+
+InformationForUpdate InformationGatherer3D::gather(
+    std::size_t agentIndex,
+    const InformationRequirements& requirements,
+    std::vector<LineSegment>& wallBuffer) const
+{
+    const auto& position = _positions[agentIndex];
+    InformationForUpdate info{};
+
+    if(requirements.neighborRadius) {
+        const auto in_horizontal_range =
+            within_horizontal_distance(position, *requirements.neighborRadius);
+        const auto in_vertical_band = within_vertical_band(position, _height);
+        for(const auto candidate :
+            _search.candidates(position, *requirements.neighborRadius, _height)) {
+            if(in_horizontal_range(_positions[candidate]) &&
+               in_vertical_band(_positions[candidate])) {
+                info.neighbors.push_back((*_agents)[candidate]);
+            }
+        }
+    }
+
+    wallBuffer.clear();
+    if(requirements.wallRadius) {
+        for(const auto& wall :
+            _wallIndex.get_near_walls(position, *requirements.wallRadius, _height)) {
+            wallBuffer.emplace_back(
+                Point{wall.source().x(), wall.source().y()},
+                Point{wall.target().x(), wall.target().y()});
+        }
+        info.walls = std::span<const LineSegment>(wallBuffer.data(), wallBuffer.size());
+    }
+    return info;
+}
