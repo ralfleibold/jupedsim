@@ -7,8 +7,6 @@
 #include <pybind11/stl.h> // IWYU pragma: keep
 
 #include <memory>
-#include <string>
-#include <utility>
 
 namespace py = pybind11;
 
@@ -32,9 +30,12 @@ void init_routing_3d(py::module_& m)
 
     py::class_<SurfaceMeshShortestPathRoutingEngine, RoutingEngine3D>(
         m, "SurfaceMeshShortestPathRoutingEngine")
-        .def(py::init([](const std::string& path) {
-            auto geometry = std::make_unique<Geometry3D>();
-            geometry->initialize_from_obj(path);
-            return std::make_unique<SurfaceMeshShortestPathRoutingEngine>(std::move(geometry));
-        }));
+        // The engine borrows the geometry; keep_alive ties the Python-side
+        // Geometry3D's lifetime to the engine so the borrow can't dangle.
+        .def(
+            py::init([](const Geometry3D& geometry) {
+                return std::make_unique<SurfaceMeshShortestPathRoutingEngine>(geometry);
+            }),
+            py::arg("geometry"),
+            py::keep_alive<1, 2>());
 }

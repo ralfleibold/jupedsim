@@ -6,14 +6,16 @@
 
 #include <CGAL/Surface_mesh_shortest_path.h>
 
-#include <memory>
 #include <tuple>
 #include <vector>
 
 class SurfaceMeshShortestPathRoutingEngine : public RoutingEngine3D
 {
 public:
-    explicit SurfaceMeshShortestPathRoutingEngine(std::unique_ptr<Geometry3D> geometry);
+    /// Borrows @p geometry (non-owning); the caller keeps it alive for the
+    /// engine's lifetime. Ownership lives with the world (later: Simulation),
+    /// matching the 2D pipeline where engines never own the geometry.
+    explicit SurfaceMeshShortestPathRoutingEngine(const Geometry3D& geometry);
     ~SurfaceMeshShortestPathRoutingEngine() override = default;
 
     bool IsValidLocation(const Location& loc) const override;
@@ -24,5 +26,5 @@ public:
     Point GetOrientation(const Point3D& source, const Location& target) override;
 
 private:
-    std::unique_ptr<Geometry3D> _geometry;
+    const Geometry3D& _geometry;
 };

@@ -13,8 +13,9 @@ OBJ = Path(__file__).parents[3] / "examples/geometry/multi_level_u_stair.obj"
 
 @pytest.fixture
 def engine():
-    e = SurfaceMeshShortestPathRoutingEngine(str(OBJ))
-    return e
+    geo = Geometry3D()
+    geo.initialize_from_obj(str(OBJ))
+    return SurfaceMeshShortestPathRoutingEngine(geo)
 
 
 def test_valid_and_invalid_locations(engine):

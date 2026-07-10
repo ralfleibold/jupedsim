@@ -61,6 +61,45 @@ SurfaceMesh flat_room_with_bridge(double z)
     return mesh;
 }
 
+/// A two-storey geometry as ONE connected mesh: ground floor (x in [0,16],
+/// y in [0,6], z=0, split into two quads at x=12) -> narrow ramp (x in
+/// [12,16], climbing y 6..12 to z=3) -> upper floor in a U back over the
+/// ground: two quads forward/left (y in [12,16]) and a final one (x in
+/// [6,12], y in [0,12]) directly above the ground floor. That (x,y) overlap
+/// forces a region split whose seam lies on a flat, continuous plane --
+/// either between the two ground quads or between the last two upper quads,
+/// depending on the split's growth order.
+SurfaceMesh upper_floor_over_ground()
+{
+    SurfaceMesh mesh{};
+    const auto a = mesh.add_vertex(Point3D{0, 0, 0});
+    const auto b = mesh.add_vertex(Point3D{12, 0, 0});
+    const auto c = mesh.add_vertex(Point3D{16, 0, 0});
+    const auto d = mesh.add_vertex(Point3D{16, 6, 0});
+    const auto e = mesh.add_vertex(Point3D{12, 6, 0});
+    const auto f = mesh.add_vertex(Point3D{0, 6, 0});
+    const auto r1 = mesh.add_vertex(Point3D{16, 12, 3});
+    const auto r2 = mesh.add_vertex(Point3D{12, 12, 3});
+    const auto u1 = mesh.add_vertex(Point3D{16, 16, 3});
+    const auto u2 = mesh.add_vertex(Point3D{12, 16, 3});
+    const auto u3 = mesh.add_vertex(Point3D{6, 16, 3});
+    const auto u4 = mesh.add_vertex(Point3D{6, 12, 3});
+    const auto u5 = mesh.add_vertex(Point3D{6, 0, 3});
+    const auto u6 = mesh.add_vertex(Point3D{12, 0, 3});
+
+    const auto add_quad_faces = [&mesh](auto v0, auto v1, auto v2, auto v3) {
+        mesh.add_face(v0, v1, v2);
+        mesh.add_face(v0, v2, v3);
+    };
+    add_quad_faces(a, b, e, f); // ground left
+    add_quad_faces(b, c, d, e); // ground right
+    add_quad_faces(e, d, r1, r2); // ramp
+    add_quad_faces(r2, r1, u1, u2); // upper, ahead of the ramp
+    add_quad_faces(u4, r2, u2, u3); // upper, turning left
+    add_quad_faces(u5, u6, r2, u4); // upper, back over the ground
+    return mesh;
+}
+
 GenericAgent make_agent(const Point& pos, const Point& destination)
 {
     auto agent = GenericAgent(
@@ -190,4 +229,58 @@ TEST(SurfaceStep, FlatGeometryReproduces2DPipeline)
     }
     // Sanity: they actually moved.
     EXPECT_GT(agents2d[0].pos.x, 3.0);
+}
+
+TEST(SurfaceStep, SeamCrossingFlipsRegionWithoutDisturbingTheWalk)
+{
+    Geometry3D geo{};
+    geo.initialize_from_mesh(upper_floor_over_ground());
+    ASSERT_EQ(geo.region_count(), 2);
+
+    const auto region_at = [&geo](double x, double y, double z) {
+        const auto loc = geo.face_below(Point3D{x, y, z + 1.0});
+        EXPECT_NE(loc.face, SurfaceMesh::null_face());
+        EXPECT_NEAR(loc.point.z(), z, 1e-9);
+        return geo.region_of(loc.face);
+    };
+
+    // The split puts the seam on exactly one of the two flat quad pairs; find
+    // out which, then walk straight across it.
+    const bool seam_on_upper = region_at(9, 15, 3) != region_at(9, 2, 3);
+    const bool seam_on_ground = region_at(3, 3, 0) != region_at(15, 3, 0);
+    ASSERT_NE(seam_on_upper, seam_on_ground);
+
+    const Point start = seam_on_upper ? Point{9, 15} : Point{3, 3};
+    const Point destination = seam_on_upper ? Point{9, 2} : Point{15, 3};
+    const double z = seam_on_upper ? 3.0 : 0.0;
+
+    const auto model = default_cfsm();
+    AgentContainer<GenericAgent> agents{};
+    agents.push_back(make_agent(start, destination));
+    std::vector<Geometry3D::FaceLocation> anchors{anchor_at_height(geo, agents.front(), z)};
+
+    InformationGatherer3D gatherer{geo, 2.2, 2.2};
+    auto region = geo.region_of(anchors.front().face);
+    const auto start_region = region;
+    int region_flips = 0;
+    for(int step = 0; step < 260; ++step) {
+        run_surface_step(dT, model, gatherer, geo, agents, anchors);
+        // The seam is no wall and no crease: the walk stays a straight line on
+        // a constant height; only the region label may change.
+        if(seam_on_upper) {
+            ASSERT_NEAR(agents.front().pos.x, start.x, 1e-6) << "step " << step;
+        } else {
+            ASSERT_NEAR(agents.front().pos.y, start.y, 1e-6) << "step " << step;
+        }
+        ASSERT_NEAR(anchors.front().point.z(), z, 1e-9) << "step " << step;
+        if(const auto current = geo.region_of(anchors.front().face); current != region) {
+            ++region_flips;
+            region = current;
+        }
+    }
+    EXPECT_EQ(region_flips, 1);
+    EXPECT_NE(region, start_region);
+    // The agent actually reached the far side of the seam.
+    EXPECT_NEAR(agents.front().pos.x, destination.x, 0.2);
+    EXPECT_NEAR(agents.front().pos.y, destination.y, 0.2);
 }

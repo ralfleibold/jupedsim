@@ -150,13 +150,12 @@ def build_app(obj_path: str | None):
 
     def load_mesh(obj_path: str, name: str) -> None:
         nonlocal engine
-        # Geometry3D is the single source of truth for what is displayed: the
-        # rendered vertices/faces and the region colouring are read from it. The
-        # engine owns its own Geometry3D built from the SAME OBJ (deterministic
-        # face order), so routing, picking and region colouring all agree.
+        # Geometry3D is the single source of truth: the rendered vertices/faces
+        # and the region colouring are read from it, and the engine borrows the
+        # SAME instance, so routing, picking and region colouring all agree.
         geo = Geometry3D()
         geo.initialize_from_obj(obj_path)
-        engine = SurfaceMeshShortestPathRoutingEngine(obj_path)
+        engine = SurfaceMeshShortestPathRoutingEngine(geo)
 
         verts = np.asarray(geo.vertices(), dtype=float)
         tris = np.asarray(geo.triangles(), dtype=np.int64)

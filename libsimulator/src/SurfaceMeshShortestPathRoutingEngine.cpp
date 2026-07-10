@@ -15,25 +15,25 @@
 // SurfaceMeshShortestPathRoutingEngine
 ////////////////////////////////////////////////////////////////////////////////
 SurfaceMeshShortestPathRoutingEngine::SurfaceMeshShortestPathRoutingEngine(
-    std::unique_ptr<Geometry3D> geometry)
-    : _geometry(std::move(geometry))
+    const Geometry3D& geometry)
+    : _geometry(geometry)
 {
 }
 
 bool SurfaceMeshShortestPathRoutingEngine::IsValidLocation(const Location& loc) const
 {
-    return _geometry->face_below(loc).face != SurfaceMesh::null_face();
+    return _geometry.face_below(loc).face != SurfaceMesh::null_face();
 }
 
 std::tuple<std::vector<Point3D>, double>
 SurfaceMeshShortestPathRoutingEngine::GetShortestPath(const Point3D& source, const Location& target)
 {
-    const auto from_below = _geometry->face_below(source);
+    const auto from_below = _geometry.face_below(source);
     if(from_below.face == SurfaceMesh::null_face()) {
         throw SimulationError(
             "GetShortestPath(): source does not project onto the walkable surface.");
     }
-    const auto target_below = _geometry->face_below(target);
+    const auto target_below = _geometry.face_below(target);
     if(target_below.face == SurfaceMesh::null_face()) {
         throw SimulationError(
             "GetShortestPath(): target does not project onto the walkable surface.");
@@ -42,12 +42,12 @@ SurfaceMeshShortestPathRoutingEngine::GetShortestPath(const Point3D& source, con
     // TODO: Implement cache for sequence tree.
     using Traits = CGAL::Surface_mesh_shortest_path_traits<SurfaceKernel, SurfaceMesh>;
     using ShortestPath = CGAL::Surface_mesh_shortest_path<Traits>;
-    ShortestPath shortest_path(_geometry->mesh());
-    const auto to_loc = shortest_path.locate(target_below.point, _geometry->aabb_tree());
+    ShortestPath shortest_path(_geometry.mesh());
+    const auto to_loc = shortest_path.locate(target_below.point, _geometry.aabb_tree());
     shortest_path.add_source_point(to_loc);
     shortest_path.build_sequence_tree();
 
-    const auto from_loc = shortest_path.locate(from_below.point, _geometry->aabb_tree());
+    const auto from_loc = shortest_path.locate(from_below.point, _geometry.aabb_tree());
     std::vector<Point3D> path;
     const auto result = shortest_path.shortest_path_points_to_source_points(
         from_loc.first, from_loc.second, std::back_inserter(path));
