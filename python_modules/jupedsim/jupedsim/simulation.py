@@ -86,6 +86,7 @@ class Simulation:
         dt: float = 0.01,
         trajectory_writer: TrajectoryWriter | None = None,
         timer_log_level: int = 1,
+        surface_routing: bool = False,
         **kwargs: Any,
     ) -> None:
         """Creates a Simulation.
@@ -114,6 +115,13 @@ class Simulation:
                 TrajectoryWriter interface. JuPedSim provides a writer that outputs trajectory data
                 in a sqlite database. If you want other formats such as CSV you need to provide
                 your own custom implementation.
+            surface_routing: Experimental, transitional. Route via exact
+                geodesics on the surface mesh (the flat z=0 lift of the given
+                geometry) instead of the legacy 2D engine. Note the legacy
+                engine keeps 0.2 m wall clearance at corners, the surface
+                engine does not, so trajectories differ near corners. This
+                flag validates the future 3D routing path and will disappear
+                once it becomes the default.
 
         Keyword Arguments:
             excluded_areas: describes exclusions
@@ -172,7 +180,10 @@ class Simulation:
             raise Exception("Unknown model type supplied")
         self._writer = trajectory_writer
         self._obj = py_jps.Simulation(
-            model=py_jps_model, geometry=build_geometry(geometry)._obj, dt=dt
+            model=py_jps_model,
+            geometry=build_geometry(geometry)._obj,
+            dt=dt,
+            surface_routing=surface_routing,
         )
         self._timer = Timer(self._obj, timer_log_level=timer_log_level)
 

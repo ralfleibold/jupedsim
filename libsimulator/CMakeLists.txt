@@ -129,6 +129,7 @@ if (BUILD_TESTS)
         test/TestPoint.cpp
         test/TestRegionSplit.cpp
         test/TestRoutingEngine3D.cpp
+        test/TestSimulation.cpp
         test/TestSimulationClock.cpp
         test/TestStage.cpp
         test/TestSurfaceStep.cpp

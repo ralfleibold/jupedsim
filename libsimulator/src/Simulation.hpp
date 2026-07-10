@@ -4,13 +4,14 @@
 #include "AgentRemovalSystem.hpp"
 #include "CollisionGeometry.hpp"
 #include "GenericAgent.hpp"
+#include "Geometry3D.hpp"
 #include "Journey.hpp"
 #include "NeighborhoodSearch.hpp"
 #include "OperationalDecisionSystem.hpp"
 #include "OperationalModel.hpp"
 #include "OperationalModelType.hpp"
 #include "Point.hpp"
-#include "RoutingEngine.hpp"
+#include "RoutingEngine3D.hpp"
 #include "SimulationClock.hpp"
 #include "Stage.hpp"
 #include "StageDescription.hpp"
@@ -40,7 +41,9 @@ class Simulation
     StageSystem _stageSystem{};
     NeighborhoodSearch<GenericAgent> _neighborhoodSearch{2.2};
     std::unique_ptr<CollisionGeometry> _geometry{};
-    std::unique_ptr<RoutingEngine> _routingEngine{};
+    /// Present iff routing runs on the surface mesh; the engine borrows it.
+    std::unique_ptr<Geometry3D> _geometry3d{};
+    std::unique_ptr<RoutingEngine3D> _routingEngine{};
     AgentContainer<GenericAgent> _agents;
     std::vector<GenericAgent::ID> _removedAgentsInLastIteration;
     std::unordered_map<Journey::ID, std::unique_ptr<Journey>> _journeys;
@@ -48,10 +51,16 @@ class Simulation
     enum LogLevel { General = 1, Detailed = 2, Debug = 3 };
 
 public:
+    /// @p geometry3d selects the routing engine: without it the legacy 2D
+    /// engine (A* + funnel, 0.2 m wall clearance) is built from @p geometry;
+    /// with it, routing runs exact geodesics on the surface mesh (for the 2D
+    /// world: the flat z=0 lift of the same polygon). Transitional seam -- at
+    /// the 3D switch the surface path becomes the only one.
     Simulation(
         std::unique_ptr<OperationalModel>&& operationalModel,
         std::unique_ptr<CollisionGeometry>&& geometry,
-        double dT);
+        double dT,
+        std::unique_ptr<Geometry3D> geometry3d = nullptr);
     Simulation(const Simulation& other) = delete;
     Simulation& operator=(const Simulation& other) = delete;
     Simulation(Simulation&& other) = delete;

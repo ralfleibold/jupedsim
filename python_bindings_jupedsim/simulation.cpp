@@ -2,6 +2,7 @@
 #include "Simulation.hpp"
 
 #include "CollisionGeometry.hpp"
+#include "Geometry3D.hpp"
 #include "Journey.hpp"
 #include "OperationalModel.hpp"
 #include "Polygon.hpp"
@@ -32,17 +33,30 @@ void init_simulation(py::module_& m)
             // returns, the Python model object passed here is disowned/invalid and must not be
             // reused.
             py::init(
-                [](std::unique_ptr<OperationalModel> model, CollisionGeometry geometry, double dT) {
+                [](std::unique_ptr<OperationalModel> model,
+                   CollisionGeometry geometry,
+                   double dT,
+                   bool surface_routing) {
                     if(!model) {
                         throw std::invalid_argument("model must not be None");
                     }
+                    auto collisionGeometry = std::make_unique<CollisionGeometry>(geometry);
+                    std::unique_ptr<Geometry3D> geometry3d{};
+                    if(surface_routing) {
+                        geometry3d = std::make_unique<Geometry3D>();
+                        geometry3d->initialize_from_polygon(collisionGeometry->Polygon());
+                    }
                     return std::make_unique<Simulation>(
-                        std::move(model), std::make_unique<CollisionGeometry>(geometry), dT);
+                        std::move(model),
+                        std::move(collisionGeometry),
+                        dT,
+                        std::move(geometry3d));
                 }),
             py::kw_only(),
             py::arg("model"),
             py::arg("geometry"),
-            py::arg("dt"))
+            py::arg("dt"),
+            py::arg("surface_routing") = false)
         .def(
             "add_waypoint_stage",
             [](Simulation& sim, std::tuple<double, double> position, double distance) {

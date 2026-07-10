@@ -48,6 +48,29 @@ def test_routing_engine_without_excluded_areas():
     assert engine is not None
 
 
+@pytest.mark.parametrize("surface_routing", [False, True])
+def test_simulation_evacuates_l_corridor_with_either_routing(surface_routing):
+    """Smoke test for the transitional surface_routing flag: the agent has to
+    round the inner corner (8, 2) and reach the exit with both engines. The
+    engine-selection behavior itself is asserted in the C++ test
+    Simulation.SurfaceRoutingSeamSelectsTheRoutingEngine."""
+    sim = jps.Simulation(
+        model=jps.CollisionFreeSpeedModel(),
+        geometry=[(0, 0), (10, 0), (10, 10), (8, 10), (8, 2), (0, 2)],
+        surface_routing=surface_routing,
+    )
+    exit_id = sim.add_exit_stage([(8, 9), (10, 9), (10, 10), (8, 10)])
+    journey_id = sim.add_journey(jps.JourneyDescription([exit_id]))
+    sim.add_agent(
+        jps.CollisionFreeSpeedModelAgentParameters(
+            journey_id=journey_id, stage_id=exit_id, position=(1, 1)
+        )
+    )
+    while sim.agent_count() > 0:
+        assert sim.iteration_count() < 10_000, "agent never reached the exit"
+        sim.iterate()
+
+
 BAD_ASTAR_ROUTINGS = [
     {
         "test_name": "corner_with_shortcut",
