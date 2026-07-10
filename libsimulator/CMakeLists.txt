@@ -69,6 +69,8 @@ target_sources(simulator PRIVATE
     src/StrategicalDesicionSystem.hpp
     src/SurfaceMeshShortestPathRoutingEngine.cpp
     src/SurfaceMeshShortestPathRoutingEngine.hpp
+    src/SurfaceStep.cpp
+    src/SurfaceStep.hpp
     src/TacticalDecisionSystem.hpp
     src/TemplateHelper.hpp
     src/Timing.cpp
@@ -130,6 +132,7 @@ if (BUILD_TESTS)
         test/TestRoutingEngine3D.cpp
         test/TestSimulationClock.cpp
         test/TestStage.cpp
+        test/TestSurfaceStep.cpp
         test/TestUniqueID.cpp
         test/TestWallIndex.cpp
     )
