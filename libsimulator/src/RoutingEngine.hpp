@@ -2,7 +2,6 @@
 #pragma once
 
 #include "CfgCgal.hpp"
-#include "Clonable.hpp"
 #include "Mesh.hpp"
 #include "Point.hpp"
 #include "RoutingEngine3D.hpp"
@@ -16,13 +15,12 @@
 /// CDT). Implements the RoutingEngine3D interface by ignoring z (queries) and
 /// lifting results to z=0, so the simulation loop already speaks the 3D
 /// interface before the switch.
-class RoutingEngine : public RoutingEngine3D, public Clonable<RoutingEngine>
+class RoutingEngine : public RoutingEngine3D
 {
     CDT cdt{};
     std::unique_ptr<Mesh> mesh{};
 
 public:
-    RoutingEngine();
     explicit RoutingEngine(const PolyWithHoles& poly);
     ~RoutingEngine() override = default;
 
@@ -33,7 +31,6 @@ public:
     Point GetNextWaypoint(const Point3D& source, const Location& target) override;
     Point GetOrientation(const Point3D& source, const Location& target) override;
 
-    std::unique_ptr<RoutingEngine> Clone() const override;
     Point ComputeWaypoint(Point currentPosition, Point destination);
     std::vector<Point> ComputeAllWaypoints(Point currentPosition, Point destination);
     bool IsRoutable(Point p) const;

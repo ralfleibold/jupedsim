@@ -25,10 +25,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 // NavMeshRoutingEngine
 ////////////////////////////////////////////////////////////////////////////////
-RoutingEngine::RoutingEngine()
-{
-}
-
 RoutingEngine::RoutingEngine(const PolyWithHoles& poly)
 {
     cdt.insert_constraint(
@@ -38,14 +34,6 @@ RoutingEngine::RoutingEngine(const PolyWithHoles& poly)
     }
     CGAL::mark_domain_in_triangulation(cdt);
     mesh = std::make_unique<Mesh>(cdt);
-}
-
-std::unique_ptr<RoutingEngine> RoutingEngine::Clone() const
-{
-    auto clone = std::make_unique<RoutingEngine>();
-    clone->cdt = cdt;
-    clone->mesh = mesh->Clone();
-    return clone;
 }
 
 bool RoutingEngine::IsValidLocation(const Location& loc) const

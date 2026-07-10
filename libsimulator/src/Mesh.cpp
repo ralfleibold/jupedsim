@@ -87,11 +87,6 @@ Mesh::Mesh(const CDT& cdt)
     updateBoundingBoxes();
 };
 
-std::unique_ptr<Mesh> Mesh::Clone() const
-{
-    return std::make_unique<Mesh>(*this);
-}
-
 void Mesh::MergeGreedy()
 {
     mergeDeadEnds();

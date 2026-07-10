@@ -10,7 +10,6 @@ target_sources(simulator PRIVATE
     src/AABB.hpp
     src/AgentRemovalSystem.hpp
     src/CfgCgal.hpp
-    src/Clonable.hpp
     src/CollisionGeometry.cpp
     src/CollisionGeometry.hpp
     src/Ellipse.cpp
