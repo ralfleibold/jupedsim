@@ -42,6 +42,13 @@ public:
     /// Take an already-built surface mesh (e.g. from a mesh builder or a test).
     void initialize_from_mesh(SurfaceMesh&& mesh);
 
+    /// Lift a 2D walkable area to a flat surface at z=0. Builds the same
+    /// constrained Delaunay triangulation as the 2D RoutingEngine (identical
+    /// constraint insertion order, no Steiner points), so the 2D and 3D
+    /// pipelines run on the identical triangle set -- the basis for exact
+    /// parity comparisons.
+    void initialize_from_polygon(const PolyWithHoles& poly);
+
     const SurfaceMesh& mesh() const { return _mesh; }
     const AABBTree& aabb_tree() const;
 

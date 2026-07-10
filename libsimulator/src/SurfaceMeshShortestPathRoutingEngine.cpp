@@ -55,22 +55,31 @@ SurfaceMeshShortestPathRoutingEngine::GetShortestPath(const Point3D& source, con
     return {std::move(path), result.first};
 }
 
-Point SurfaceMeshShortestPathRoutingEngine::GetOrientation(
+Point SurfaceMeshShortestPathRoutingEngine::GetNextWaypoint(
     const Point3D& source,
     const Location& target)
 {
     const auto result = GetShortestPath(source, target);
     const auto& path = std::get<0>(result);
-    // Direction towards the next waypoint, projected onto x/y (z dropped).
-    // A query point sitting exactly on a triangle edge makes CGAL emit a
-    // duplicate leading waypoint, so skip any waypoints coinciding with the
-    // start and steer towards the first one that actually differs.
+    // Next waypoint, projected onto x/y (z dropped). A query point sitting
+    // exactly on a triangle edge makes CGAL emit a duplicate leading waypoint,
+    // so skip any waypoints coinciding with the start and return the first one
+    // that actually differs.
     for(std::size_t i = 1; i < path.size(); ++i) {
         const Point dir(path[i].x() - path[0].x(), path[i].y() - path[0].y());
         if(!dir.isZeroLength()) {
-            return dir.Normalized();
+            return {path[i].x(), path[i].y()};
         }
     }
-    // Already at the destination (or degenerate) -> no direction.
-    return {0, 0};
+    // Already at the destination (or degenerate).
+    return {source.x(), source.y()};
+}
+
+Point SurfaceMeshShortestPathRoutingEngine::GetOrientation(
+    const Point3D& source,
+    const Location& target)
+{
+    const Point dir = GetNextWaypoint(source, target) - Point(source.x(), source.y());
+    // At the destination -> no direction.
+    return dir.isZeroLength() ? Point{0, 0} : dir.Normalized();
 }

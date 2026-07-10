@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
+#include "CollisionGeometry.hpp"
 #include "Geometry3D.hpp"
 #include "SurfaceMeshShortestPathRoutingEngine.hpp"
 #include "type_casters.hpp"
@@ -17,6 +18,12 @@ void init_routing_3d(py::module_& m)
     py::class_<Geometry3D>(m, "Geometry3D")
         .def(py::init<>())
         .def("initialize_from_obj", &Geometry3D::initialize_from_obj, py::arg("path"))
+        .def(
+            "initialize_from_polygon",
+            [](Geometry3D& geo, const CollisionGeometry& geometry) {
+                geo.initialize_from_polygon(geometry.Polygon());
+            },
+            py::arg("geometry"))
         .def("is_valid_location", &Geometry3D::is_valid_location)
         .def("region_count", &Geometry3D::region_count)
         .def("region_ids", &Geometry3D::region_ids)

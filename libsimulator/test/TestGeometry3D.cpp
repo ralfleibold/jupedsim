@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "Geometry3D.hpp"
 
+#include <CGAL/mark_domain_in_triangulation.h>
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
 #include <set>
+#include <utility>
+#include <vector>
 
 namespace
 {
@@ -173,4 +177,75 @@ TEST(Geometry3DWalk, WalkTargetOutsideNeighbourhoodThrows)
     // 'to' far outside the start face and its 1-ring: a step too large for the
     // mesh resolution (or off-surface) -- rejected rather than silently wrong.
     EXPECT_ANY_THROW(geo.walk_on_surface(0, {3, 2}, {20, 20}));
+}
+
+namespace
+{
+/// 10x10 square with a centred 2x2 hole, the 2D input shape.
+PolyWithHoles square_with_hole()
+{
+    const std::vector<K::Point_2> outer{{0, 0}, {10, 0}, {10, 10}, {0, 10}};
+    const std::vector<K::Point_2> hole{{4, 4}, {6, 4}, {6, 6}, {4, 6}};
+    PolyWithHoles poly{Poly(outer.begin(), outer.end())};
+    poly.add_hole(Poly(hole.begin(), hole.end()));
+    return poly;
+}
+} // namespace
+
+TEST(Geometry3DFromPolygon, HoleIsNotWalkable)
+{
+    Geometry3D geo{};
+    geo.initialize_from_polygon(square_with_hole());
+
+    ASSERT_EQ(geo.region_count(), 1);
+    EXPECT_TRUE(geo.is_valid_location({1, 1, 1}));
+    EXPECT_FALSE(geo.is_valid_location({5, 5, 1})); // inside the hole
+    EXPECT_FALSE(geo.is_valid_location({20, 20, 1})); // outside
+    // All lifted vertices sit at z=0.
+    for(const auto& v : geo.vertices()) {
+        EXPECT_EQ(v[2], 0.0);
+    }
+}
+
+TEST(Geometry3DFromPolygon, LiftReproducesThe2DTriangulation)
+{
+    const auto poly = square_with_hole();
+    Geometry3D geo{};
+    geo.initialize_from_polygon(poly);
+
+    // The reference: the CDT exactly as the 2D RoutingEngine builds it.
+    CDT cdt{};
+    cdt.insert_constraint(
+        poly.outer_boundary().vertices_begin(), poly.outer_boundary().vertices_end(), true);
+    for(const auto& hole : poly.holes()) {
+        cdt.insert_constraint(hole.vertices_begin(), hole.vertices_end(), true);
+    }
+    CGAL::mark_domain_in_triangulation(cdt);
+
+    // Coordinates are copied verbatim (both kernels store doubles), so the
+    // centroid sets must match exactly -- same triangles, no Steiner points.
+    std::vector<std::pair<double, double>> expected{};
+    for(auto f = cdt.finite_faces_begin(); f != cdt.finite_faces_end(); ++f) {
+        if(f->get_in_domain()) {
+            const auto c = CGAL::centroid(
+                f->vertex(0)->point(), f->vertex(1)->point(), f->vertex(2)->point());
+            expected.emplace_back(c.x(), c.y());
+        }
+    }
+    const auto vertices = geo.vertices();
+    std::vector<std::pair<double, double>> actual{};
+    for(const auto& tri : geo.triangles()) {
+        double x = 0;
+        double y = 0;
+        for(const auto v : tri) {
+            x += vertices[v][0];
+            y += vertices[v][1];
+        }
+        actual.emplace_back(x / 3.0, y / 3.0);
+    }
+    std::sort(expected.begin(), expected.end());
+    std::sort(actual.begin(), actual.end());
+    EXPECT_EQ(actual, expected);
+    // No Steiner points: exactly the 8 polygon corners.
+    EXPECT_EQ(vertices.size(), 8u);
 }

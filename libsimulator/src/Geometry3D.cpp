@@ -6,10 +6,12 @@
 #include <CGAL/Polygon_mesh_processing/triangulate_faces.h>
 #include <CGAL/boost/graph/IO/polygon_mesh_io.h>
 #include <CGAL/boost/graph/helpers.h>
+#include <CGAL/mark_domain_in_triangulation.h>
 
 #include <array>
 #include <cassert>
 #include <iterator>
+#include <map>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -70,6 +72,38 @@ void Geometry3D::initialize_from_mesh(SurfaceMesh&& mesh)
 {
     _mesh = std::move(mesh);
     build();
+}
+
+void Geometry3D::initialize_from_polygon(const PolyWithHoles& poly)
+{
+    // Same CDT the 2D RoutingEngine builds (same constraint insertion order):
+    // keeping the triangulations identical is what makes 2D/3D results
+    // directly comparable.
+    CDT cdt{};
+    cdt.insert_constraint(
+        poly.outer_boundary().vertices_begin(), poly.outer_boundary().vertices_end(), true);
+    for(const auto& hole : poly.holes()) {
+        cdt.insert_constraint(hole.vertices_begin(), hole.vertices_end(), true);
+    }
+    CGAL::mark_domain_in_triangulation(cdt);
+
+    SurfaceMesh mesh{};
+    std::map<CDT::Vertex_handle, SurfaceMesh::Vertex_index> idx{};
+    const auto vertex_of = [&](CDT::Vertex_handle v) {
+        const auto it = idx.find(v);
+        if(it != idx.end()) {
+            return it->second;
+        }
+        const auto& p = v->point();
+        return idx[v] = mesh.add_vertex({p.x(), p.y(), 0.0});
+    };
+    for(auto f = cdt.finite_faces_begin(); f != cdt.finite_faces_end(); ++f) {
+        if(f->get_in_domain()) {
+            mesh.add_face(
+                vertex_of(f->vertex(0)), vertex_of(f->vertex(1)), vertex_of(f->vertex(2)));
+        }
+    }
+    initialize_from_mesh(std::move(mesh));
 }
 
 void Geometry3D::build()

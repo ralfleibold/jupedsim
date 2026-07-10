@@ -3,6 +3,8 @@ import math
 from pathlib import Path
 
 import pytest
+import shapely
+from jupedsim.geometry_utils import build_geometry_3d
 from jupedsim.internal.routing_3d import (
     Geometry3D,
     SurfaceMeshShortestPathRoutingEngine,
@@ -66,6 +68,35 @@ def test_orientation_is_unit_vector(engine):
     d = engine.get_orientation((3, 4, 2), (13, 14, 15))
     assert len(d) == 2
     assert math.hypot(*d) == pytest.approx(1.0)
+
+
+def test_build_geometry_3d_lifts_shapely_polygon():
+    poly = shapely.Polygon(
+        [(0, 0), (10, 0), (10, 10), (0, 10)],
+        holes=[[(4, 4), (6, 4), (6, 6), (4, 6)]],
+    )
+    geo = build_geometry_3d(poly)
+
+    assert geo.region_count() == 1
+    assert geo.is_valid_location((1, 1, 1))
+    assert not geo.is_valid_location((5, 5, 1))  # inside the hole
+    assert not geo.is_valid_location((20, 20, 1))  # outside
+    # flat lift: every vertex at z=0
+    assert all(v[2] == 0.0 for v in geo.vertices())
+
+    # routing on the lifted geometry has to bend around the hole:
+    # (2,5) -> (8,5) via the hole corners (4,4) and (6,4) (or the symmetric
+    # pair above), length 2 + 2*sqrt(5).
+    engine = SurfaceMeshShortestPathRoutingEngine(geo)
+    path, cost = engine.get_shortest_path((2, 5, 1), (8, 5, 1))
+    assert cost == pytest.approx(2 + 2 * math.sqrt(5))
+    assert all(p[2] == pytest.approx(0.0) for p in path)
+
+
+def test_build_geometry_3d_accepts_wkt():
+    geo = build_geometry_3d("POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))")
+    assert geo.region_count() == 1
+    assert geo.is_valid_location((5, 5, 1))
 
 
 def test_fixed_target_several_sources(engine):

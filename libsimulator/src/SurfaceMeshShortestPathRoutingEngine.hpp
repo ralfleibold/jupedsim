@@ -23,6 +23,8 @@ public:
     std::tuple<std::vector<Point3D>, double>
     GetShortestPath(const Point3D& source, const Location& target) override;
 
+    Point GetNextWaypoint(const Point3D& source, const Location& target) override;
+
     Point GetOrientation(const Point3D& source, const Location& target) override;
 
 private:

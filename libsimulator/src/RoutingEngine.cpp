@@ -48,6 +48,39 @@ std::unique_ptr<RoutingEngine> RoutingEngine::Clone() const
     return clone;
 }
 
+bool RoutingEngine::IsValidLocation(const Location& loc) const
+{
+    return IsRoutable({loc.x(), loc.y()});
+}
+
+std::tuple<std::vector<Point3D>, double>
+RoutingEngine::GetShortestPath(const Point3D& source, const Location& target)
+{
+    const auto waypoints =
+        ComputeAllWaypoints({source.x(), source.y()}, {target.x(), target.y()});
+    std::vector<Point3D> path{};
+    path.reserve(waypoints.size());
+    double cost = 0;
+    for(const auto& p : waypoints) {
+        if(!path.empty()) {
+            cost += (p - Point{path.back().x(), path.back().y()}).Norm();
+        }
+        path.emplace_back(p.x, p.y, 0.0);
+    }
+    return {std::move(path), cost};
+}
+
+Point RoutingEngine::GetNextWaypoint(const Point3D& source, const Location& target)
+{
+    return ComputeWaypoint({source.x(), source.y()}, {target.x(), target.y()});
+}
+
+Point RoutingEngine::GetOrientation(const Point3D& source, const Location& target)
+{
+    const Point dir = GetNextWaypoint(source, target) - Point(source.x(), source.y());
+    return dir.isZeroLength() ? Point{0, 0} : dir.Normalized();
+}
+
 Point RoutingEngine::ComputeWaypoint(Point currentPosition, Point destination)
 {
     return ComputeAllWaypoints(currentPosition, destination)[1];

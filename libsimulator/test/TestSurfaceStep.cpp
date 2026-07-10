@@ -231,6 +231,57 @@ TEST(SurfaceStep, FlatGeometryReproduces2DPipeline)
     EXPECT_GT(agents2d[0].pos.x, 3.0);
 }
 
+TEST(SurfaceStep, LiftedHoleGeometryReproduces2DPipelineWithWallContact)
+{
+    // Both pipelines run on the SAME 2D input: the 2D one on the
+    // CollisionGeometry, the 3D one on its polygon lifted to z=0 via
+    // initialize_from_polygon. Agent 0 aims straight through the hole and must
+    // stall against its wall; agent 1 squeezes past just below it -- so wall
+    // interaction shapes both trajectories, and they must match exactly.
+    const auto goal_a = Point{8, 5};
+    const auto goal_b = Point{8, 3.5};
+    constexpr int steps = 100;
+
+    GeometryBuilder builder{};
+    builder.AddAccessibleArea({{0, 0}, {10, 0}, {10, 10}, {0, 10}});
+    builder.ExcludeFromAccessibleArea({{4, 4}, {6, 4}, {6, 6}, {4, 6}});
+    const auto geometry2d = builder.Build();
+
+    AgentContainer<GenericAgent> agents2d{};
+    agents2d.push_back(make_agent({2, 5}, goal_a));
+    agents2d.push_back(make_agent({2, 3.5}, goal_b));
+
+    OperationalDecisionSystem system{std::make_unique<CollisionFreeSpeedModel>(default_cfsm())};
+    NeighborhoodSearch<GenericAgent> neighborhoodSearch{2.2};
+    for(int step = 0; step < steps; ++step) {
+        neighborhoodSearch.Update(agents2d);
+        system.Run(dT, 0., neighborhoodSearch, geometry2d, agents2d);
+    }
+
+    Geometry3D geo{};
+    geo.initialize_from_polygon(geometry2d.Polygon());
+    const auto model = default_cfsm();
+    AgentContainer<GenericAgent> agents3d{};
+    agents3d.push_back(make_agent({2, 5}, goal_a));
+    agents3d.push_back(make_agent({2, 3.5}, goal_b));
+    std::vector<Geometry3D::FaceLocation> anchors{
+        anchor_at_height(geo, agents3d[0], 0), anchor_at_height(geo, agents3d[1], 0)};
+
+    InformationGatherer3D gatherer{geo, 2.2, 2.2};
+    for(int step = 0; step < steps; ++step) {
+        run_surface_step(dT, model, gatherer, geo, agents3d, anchors);
+    }
+
+    for(std::size_t i = 0; i < agents2d.size(); ++i) {
+        EXPECT_NEAR(agents3d[i].pos.x, agents2d[i].pos.x, 1e-9) << "agent " << i;
+        EXPECT_NEAR(agents3d[i].pos.y, agents2d[i].pos.y, 1e-9) << "agent " << i;
+    }
+    // Sanity on the shared outcome: agent 0 is held up by the hole's wall,
+    // agent 1 walked past below it.
+    EXPECT_LT(agents2d[0].pos.x, 4.0);
+    EXPECT_GT(agents2d[1].pos.x, 5.0);
+}
+
 TEST(SurfaceStep, SeamCrossingFlipsRegionWithoutDisturbingTheWalk)
 {
     Geometry3D geo{};

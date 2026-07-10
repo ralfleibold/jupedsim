@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "CfgCgal.hpp"
 #include "Geometry3D.hpp"
+#include "RoutingEngine.hpp"
 #include "SimulationError.hpp"
 #include "SurfaceMeshShortestPathRoutingEngine.hpp"
 
@@ -241,4 +242,67 @@ TEST(RoutingEngine3DLShape, GeodesicBendsAroundReflexCorner)
     ASSERT_EQ(path.size(), 3u);
     EXPECT_NEAR(path[1].x(), 1.0, 1e-6);
     EXPECT_NEAR(path[1].y(), 1.0, 1e-6);
+}
+
+TEST(RoutingEngine3DLShape, NextWaypointIsTheReflexCorner)
+{
+    const std::vector<K::Point_2> outer{{0, 0}, {3, 0}, {3, 1}, {1, 1}, {1, 3}, {0, 3}};
+
+    Geometry3D geometry{};
+    geometry.initialize_from_mesh(mesh_from_polygon(outer)); // flat z = 0
+    SurfaceMeshShortestPathRoutingEngine engine{geometry};
+
+    // The geodesic pivots exactly on the reflex corner -- no wall clearance
+    // (unlike the legacy 2D funnel, which keeps 0.2 m off).
+    const Point wp = engine.GetNextWaypoint({2.5, 0.5, 1}, {0.5, 2.5, 1});
+    EXPECT_NEAR(wp.x, 1.0, 1e-6);
+    EXPECT_NEAR(wp.y, 1.0, 1e-6);
+
+    // Already at the target: the waypoint degenerates to the source itself.
+    const Point at_goal = engine.GetNextWaypoint({2.5, 0.5, 1}, {2.5, 0.5, 1});
+    EXPECT_NEAR(at_goal.x, 2.5, 1e-9);
+    EXPECT_NEAR(at_goal.y, 0.5, 1e-9);
+}
+
+TEST(RoutingEngine2DAsRoutingEngine3D, DelegatesToTheLegacyEngineIgnoringZ)
+{
+    // The legacy 2D engine behind the 3D interface: identical answers to its
+    // native 2D methods, z ignored on queries and 0 on results.
+    const std::vector<K::Point_2> outer{{0, 0}, {3, 0}, {3, 1}, {1, 1}, {1, 3}, {0, 3}};
+    RoutingEngine legacy{PolyWithHoles{Poly(outer.begin(), outer.end())}};
+    RoutingEngine3D& engine = legacy;
+
+    EXPECT_TRUE(engine.IsValidLocation({0.5, 0.5, 7.0})); // z ignored
+    EXPECT_FALSE(engine.IsValidLocation({2.5, 2.5, 0.0})); // missing quadrant
+
+    const Point source2d{2.5, 0.5};
+    const Point target2d{0.5, 2.5};
+    const Point3D source{source2d.x, source2d.y, 3.0};
+    const Location target{target2d.x, target2d.y, -1.0};
+
+    const auto expected_wp = legacy.ComputeWaypoint(source2d, target2d);
+    const Point wp = engine.GetNextWaypoint(source, target);
+    EXPECT_DOUBLE_EQ(wp.x, expected_wp.x);
+    EXPECT_DOUBLE_EQ(wp.y, expected_wp.y);
+    // The funnel's 0.2 m clearance shows: the waypoint is NOT the corner (1,1).
+    EXPECT_GT((wp - Point{1, 1}).Norm(), 0.1);
+
+    const auto expected_path = legacy.ComputeAllWaypoints(source2d, target2d);
+    const auto [path, cost] = engine.GetShortestPath(source, target);
+    ASSERT_EQ(path.size(), expected_path.size());
+    double expected_cost = 0;
+    for(std::size_t i = 0; i < path.size(); ++i) {
+        EXPECT_DOUBLE_EQ(path[i].x(), expected_path[i].x);
+        EXPECT_DOUBLE_EQ(path[i].y(), expected_path[i].y);
+        EXPECT_EQ(path[i].z(), 0.0); // lifted flat
+        if(i > 0) {
+            expected_cost += (expected_path[i] - expected_path[i - 1]).Norm();
+        }
+    }
+    EXPECT_DOUBLE_EQ(cost, expected_cost);
+
+    const Point dir = engine.GetOrientation(source, target);
+    const Point expected_dir = (expected_wp - source2d).Normalized();
+    EXPECT_DOUBLE_EQ(dir.x, expected_dir.x);
+    EXPECT_DOUBLE_EQ(dir.y, expected_dir.y);
 }
