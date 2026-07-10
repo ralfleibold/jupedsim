@@ -3,7 +3,6 @@
 
 #include "CollisionFreeSpeedModelData.hpp"
 #include "CollisionFreeSpeedModelUpdate.hpp"
-#include "CollisionGeometry.hpp"
 #include "GenericAgent.hpp"
 #include "GeometricFunctions.hpp"
 #include "LineSegment.hpp"
@@ -36,14 +35,25 @@ OperationalModelType CollisionFreeSpeedModel::Type() const
     return OperationalModelType::COLLISION_FREE_SPEED;
 }
 
+InformationRequirements CollisionFreeSpeedModel::Requirements(const GenericAgent&) const
+{
+    return {.neighborRadius = _cutOffRadius, .wallRadius = _cutOffRadius};
+}
+
+InformationRequirements
+CollisionFreeSpeedModel::ConstraintRequirements(const GenericAgent& agent) const
+{
+    const auto& model = std::get<CollisionFreeSpeedModelData>(agent.model);
+    return {.neighborRadius = 2., .wallRadius = model.radius};
+}
+
 OperationalModelUpdate CollisionFreeSpeedModel::ComputeNewPosition(
     double dT,
     const GenericAgent& ped,
-    const CollisionGeometry& geometry,
-    const NeighborhoodSearchType& neighborhoodSearch) const
+    const InformationForUpdate& info) const
 {
-    auto neighborhood = neighborhoodSearch.GetNeighboringAgents(ped.pos, _cutOffRadius);
-    const auto& boundary = geometry.LineSegmentsInApproxDistanceTo(ped.pos);
+    auto neighborhood = info.neighbors;
+    const auto& boundary = info.walls;
 
     // Remove any agent from the neighborhood that is obstructed by geometry and the current
     // agent
@@ -57,8 +67,8 @@ OperationalModelUpdate CollisionFreeSpeedModel::ComputeNewPosition(
                 }
                 const auto agent_to_neighbor = LineSegment(ped.pos, neighbor.pos);
                 if(std::find_if(
-                       boundary.cbegin(),
-                       boundary.cend(),
+                       boundary.begin(),
+                       boundary.end(),
                        [&agent_to_neighbor](const auto& boundary_segment) {
                            return intersects(agent_to_neighbor, boundary_segment);
                        }) != boundary.end()) {
@@ -78,8 +88,8 @@ OperationalModelUpdate CollisionFreeSpeedModel::ComputeNewPosition(
         });
 
     const auto boundaryRepulsion = std::accumulate(
-        boundary.cbegin(),
-        boundary.cend(),
+        boundary.begin(),
+        boundary.end(),
         Point(0, 0),
         [this, &ped](const auto& acc, const auto& element) {
             return acc + BoundaryRepulsion(ped, element);
@@ -115,8 +125,7 @@ void CollisionFreeSpeedModel::ApplyUpdate(const OperationalModelUpdate& upd, Gen
 
 void CollisionFreeSpeedModel::CheckModelConstraint(
     const GenericAgent& agent,
-    const NeighborhoodSearchType& neighborhoodSearch,
-    const CollisionGeometry& geometry) const
+    const InformationForUpdate& info) const
 {
     const auto& model = std::get<CollisionFreeSpeedModelData>(agent.model);
 
@@ -135,8 +144,7 @@ void CollisionFreeSpeedModel::CheckModelConstraint(
     constexpr double timeGapMax = 10.;
     validateConstraint(timeGap, timeGapMin, timeGapMax, "timeGap");
 
-    const auto neighbors = neighborhoodSearch.GetNeighboringAgents(agent.pos, 2);
-    for(const auto& neighbor : neighbors) {
+    for(const auto& neighbor : info.neighbors) {
         if(agent.id == neighbor.id) {
             continue;
         }
@@ -152,8 +160,12 @@ void CollisionFreeSpeedModel::CheckModelConstraint(
         }
     }
 
-    const auto lineSegments = geometry.LineSegmentsInDistanceTo(r, agent.pos);
-    if(std::begin(lineSegments) != std::end(lineSegments)) {
+    // info.walls may be over-inclusive, apply the exact distance here.
+    const auto tooClose =
+        std::any_of(info.walls.begin(), info.walls.end(), [&agent, r](const auto& segment) {
+            return segment.DistTo(agent.pos) <= r;
+        });
+    if(tooClose) {
         throw SimulationError(
             "Model constraint violation: Agent {} too close to geometry boundaries, distance "
             "<= {}",

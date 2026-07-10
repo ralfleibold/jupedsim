@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
 
-#include "CollisionGeometry.hpp"
 #include "LineSegment.hpp"
-#include "NeighborhoodSearch.hpp"
 #include "OperationalModel.hpp"
 #include "OperationalModelType.hpp"
 #include "Point.hpp"
@@ -12,10 +10,6 @@ struct GenericAgent;
 
 class SocialForceModel : public OperationalModel
 {
-public:
-    using NeighborhoodSearchType = NeighborhoodSearch<GenericAgent>;
-
-private:
     double _cutOffRadius{2.5};
     double bodyForce;
     double friction;
@@ -24,16 +18,15 @@ public:
     SocialForceModel(double bodyForce_, double friction_);
     ~SocialForceModel() override = default;
     OperationalModelType Type() const override;
+    InformationRequirements Requirements(const GenericAgent& agent) const override;
+    InformationRequirements ConstraintRequirements(const GenericAgent& agent) const override;
     OperationalModelUpdate ComputeNewPosition(
         double dT,
         const GenericAgent& ped,
-        const CollisionGeometry& geometry,
-        const NeighborhoodSearchType& neighborhoodSearch) const override;
+        const InformationForUpdate& info) const override;
     void ApplyUpdate(const OperationalModelUpdate& update, GenericAgent& agent) const override;
-    void CheckModelConstraint(
-        const GenericAgent& agent,
-        const NeighborhoodSearchType& neighborhoodSearch,
-        const CollisionGeometry& geometry) const override;
+    void CheckModelConstraint(const GenericAgent& agent, const InformationForUpdate& info)
+        const override;
 
 private:
     /**

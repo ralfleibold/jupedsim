@@ -1,20 +1,16 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
-#include "CollisionGeometry.hpp"
 #include "LineSegment.hpp"
-#include "NeighborhoodSearch.hpp"
 #include "OperationalModel.hpp"
 #include "OperationalModelType.hpp"
 #include "Point.hpp"
+
+#include <span>
 
 struct GenericAgent;
 
 class GeneralizedCentrifugalForceModel : public OperationalModel
 {
-public:
-    using NeighborhoodSearchType = NeighborhoodSearch<GenericAgent>;
-
-private:
     double strengthNeighborRepulsion;
     double strengthGeometryRepulsion;
     double maxNeighborInteractionDistance;
@@ -37,16 +33,15 @@ public:
     ~GeneralizedCentrifugalForceModel() override = default;
 
     OperationalModelType Type() const override;
+    InformationRequirements Requirements(const GenericAgent& agent) const override;
+    InformationRequirements ConstraintRequirements(const GenericAgent& agent) const override;
     OperationalModelUpdate ComputeNewPosition(
         double dT,
         const GenericAgent& agent,
-        const CollisionGeometry& geometry,
-        const NeighborhoodSearchType& neighborhoodSearch) const override;
+        const InformationForUpdate& info) const override;
     void ApplyUpdate(const OperationalModelUpdate& upate, GenericAgent& agent) const override;
-    void CheckModelConstraint(
-        const GenericAgent& agent,
-        const NeighborhoodSearchType& neighborhoodSearch,
-        const CollisionGeometry& geometry) const override;
+    void CheckModelConstraint(const GenericAgent& agent, const InformationForUpdate& info)
+        const override;
 
 private:
     /**
@@ -83,7 +78,7 @@ private:
      *
      * @return
      */
-    Point ForceRepRoom(const GenericAgent& ped, const CollisionGeometry& geometry) const;
+    Point ForceRepRoom(const GenericAgent& ped, std::span<const LineSegment> walls) const;
     Point ForceRepWall(const GenericAgent& ped, const LineSegment& l) const;
     Point ForceRepStatPoint(const GenericAgent& ped, const Point& p, double l, double vn) const;
     Point ForceInterpolation(

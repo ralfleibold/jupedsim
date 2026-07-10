@@ -1061,7 +1061,7 @@ class _MinimalCustomState:
 
 
 class _MinimalCustomModel(jps.CustomOperationalModel):
-    def compute_new_position(self, dt, ped, geometry, neighborhood_search):
+    def compute_new_position(self, dt, ped, info):
         return _MinimalCustomState(ped.position)
 
 
@@ -1110,12 +1110,12 @@ class _NoPositionState:
 
 
 class _NoPositionModel(jps.CustomOperationalModel):
-    def compute_new_position(self, dt, ped, geometry, neighborhood_search):
+    def compute_new_position(self, dt, ped, info):
         return _NoPositionState()
 
 
 class _WrongPositionTypeModel(jps.CustomOperationalModel):
-    def compute_new_position(self, dt, ped, geometry, neighborhood_search):
+    def compute_new_position(self, dt, ped, info):
         return _MinimalCustomState("not-a-tuple")
 
 

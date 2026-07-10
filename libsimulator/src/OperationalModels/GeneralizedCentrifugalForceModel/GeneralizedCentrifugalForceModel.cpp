@@ -4,9 +4,9 @@
 #include "Ellipse.hpp"
 #include "GeneralizedCentrifugalForceModelData.hpp"
 #include "GenericAgent.hpp"
+#include "GeometricFunctions.hpp"
 #include "Macros.hpp"
 #include "Mathematics.hpp"
-#include "NeighborhoodSearch.hpp"
 #include "OperationalModel.hpp"
 #include "OperationalModelType.hpp"
 #include "Simulation.hpp"
@@ -14,6 +14,7 @@
 
 #include <Logger.hpp>
 
+#include <algorithm>
 #include <stdexcept>
 
 GeneralizedCentrifugalForceModel::GeneralizedCentrifugalForceModel(
@@ -41,30 +42,45 @@ OperationalModelType GeneralizedCentrifugalForceModel::Type() const
     return OperationalModelType::GENERALIZED_CENTRIFUGAL_FORCE;
 }
 
+InformationRequirements GeneralizedCentrifugalForceModel::Requirements(const GenericAgent&) const
+{
+    const double radius = 4.0; // TODO (MC) check this free parameter
+    return {.neighborRadius = radius, .wallRadius = radius};
+}
+
+InformationRequirements
+GeneralizedCentrifugalForceModel::ConstraintRequirements(const GenericAgent& agent) const
+{
+    const auto& model = std::get<GeneralizedCentrifugalForceModelData>(agent.model);
+    return {.neighborRadius = 2., .wallRadius = std::max(model.AMin, model.BMax) / 2.};
+}
+
 OperationalModelUpdate GeneralizedCentrifugalForceModel::ComputeNewPosition(
     double dT,
     const GenericAgent& agent,
-    const CollisionGeometry& geometry,
-    const NeighborhoodSearchType& neighborhoodSearch) const
+    const InformationForUpdate& info) const
 {
-    const double radius = 4.0; // TODO (MC) check this free parameter
-    const auto neighborhood = neighborhoodSearch.GetNeighboringAgents(agent.pos, radius);
     const auto p1 = agent.pos;
     Point F_rep;
-    for(const auto& neighbor : neighborhood) {
-        // TODO(schroedtert): Only use neighbors who have an unobstructed line of sight to the
-        // current agent
+    for(const auto& neighbor : info.neighbors) {
         if(neighbor.id == agent.id) {
             continue;
         }
-        if(!geometry.IntersectsAny(LineSegment(p1, neighbor.pos))) {
+        // Any wall that could block a sight line within the neighbor radius is
+        // contained in info.walls.
+        const LineSegment sightLine(p1, neighbor.pos);
+        const bool obstructed =
+            std::any_of(info.walls.begin(), info.walls.end(), [&sightLine](const auto& wall) {
+                return intersects(sightLine, wall);
+            });
+        if(!obstructed) {
             F_rep += ForceRepPed(agent, neighbor);
         }
     }
 
     GeneralizedCentrifugalForceModelUpdate update{};
     // repulsive forces to the walls and transitions that are not my target
-    Point repwall = ForceRepRoom(agent, geometry);
+    Point repwall = ForceRepRoom(agent, info.walls);
     const auto& model = std::get<GeneralizedCentrifugalForceModelData>(agent.model);
     Point fd = ForceDriv(agent, agent.destination, model.mass, model.tau, dT, update);
     Point acc = (fd + F_rep + repwall) / model.mass;
@@ -93,8 +109,7 @@ void GeneralizedCentrifugalForceModel::ApplyUpdate(
 
 void GeneralizedCentrifugalForceModel::CheckModelConstraint(
     const GenericAgent& agent,
-    const NeighborhoodSearchType& neighborhoodSearch,
-    const CollisionGeometry& geometry) const
+    const InformationForUpdate& info) const
 {
     const auto& model = std::get<GeneralizedCentrifugalForceModelData>(agent.model);
 
@@ -137,8 +152,7 @@ void GeneralizedCentrifugalForceModel::CheckModelConstraint(
     constexpr double BMaxMax = 2.;
     validateConstraint(BMax, BMaxMin, BMaxMax, "BMax");
 
-    const auto neighbors = neighborhoodSearch.GetNeighboringAgents(agent.pos, 2);
-    for(const auto& neighbor : neighbors) {
+    for(const auto& neighbor : info.neighbors) {
         if(agent.id == neighbor.id) {
             continue;
         }
@@ -159,8 +173,12 @@ void GeneralizedCentrifugalForceModel::CheckModelConstraint(
     }
 
     const auto maxRadius = std::max(AMin, BMax) / 2.;
-    const auto lineSegments = geometry.LineSegmentsInDistanceTo(maxRadius, agent.pos);
-    if(std::begin(lineSegments) != std::end(lineSegments)) {
+    // info.walls may be over-inclusive, apply the exact distance here.
+    const auto tooClose =
+        std::any_of(info.walls.begin(), info.walls.end(), [&agent, maxRadius](const auto& segment) {
+            return segment.DistTo(agent.pos) <= maxRadius;
+        });
+    if(tooClose) {
         throw SimulationError(
             "Model constraint violation: Agent {} too close to geometry boundaries, distance <= {}",
             agent.pos,
@@ -316,13 +334,11 @@ Point GeneralizedCentrifugalForceModel::ForceRepPed(
 
 inline Point GeneralizedCentrifugalForceModel::ForceRepRoom(
     const GenericAgent& ped,
-    const CollisionGeometry& geometry) const
+    std::span<const LineSegment> walls) const
 {
-    const auto& walls = geometry.LineSegmentsInApproxDistanceTo(ped.pos);
-
     auto f = std::accumulate(
-        walls.cbegin(),
-        walls.cend(),
+        walls.begin(),
+        walls.end(),
         Point(0, 0),
         [this, &ped](const auto& acc, const auto& element) {
             return acc + ForceRepWall(ped, element);

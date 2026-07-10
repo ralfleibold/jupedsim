@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
 
-#include "CollisionGeometry.hpp"
+#include "InformationForUpdate.hpp"
 #include "OperationalModelType.hpp"
 #include "OperationalModelUpdate.hpp"
 #include "Point.hpp"
@@ -11,9 +11,6 @@
 
 #include <optional>
 #include <string>
-
-template <typename T>
-class NeighborhoodSearch;
 
 struct GenericAgent;
 
@@ -82,15 +79,20 @@ public:
     virtual ~OperationalModel() = default;
 
     virtual OperationalModelType Type() const = 0;
+
+    /// What the framework must gather for @p agent before ComputeNewPosition().
+    /// Queried anew for every agent in every step.
+    virtual InformationRequirements Requirements(const GenericAgent& agent) const = 0;
+
+    /// What the framework must gather for @p agent before CheckModelConstraint().
+    virtual InformationRequirements ConstraintRequirements(const GenericAgent& agent) const = 0;
+
     virtual OperationalModelUpdate ComputeNewPosition(
         double dT,
         const GenericAgent& ped,
-        const CollisionGeometry& geometry,
-        const NeighborhoodSearch<GenericAgent>& neighborhoodSearch) const = 0;
+        const InformationForUpdate& info) const = 0;
 
     virtual void ApplyUpdate(const OperationalModelUpdate& update, GenericAgent& agent) const = 0;
-    virtual void CheckModelConstraint(
-        const GenericAgent& agent,
-        const NeighborhoodSearch<GenericAgent>& neighborhoodSearch,
-        const CollisionGeometry& geometry) const = 0;
+    virtual void
+    CheckModelConstraint(const GenericAgent& agent, const InformationForUpdate& info) const = 0;
 };

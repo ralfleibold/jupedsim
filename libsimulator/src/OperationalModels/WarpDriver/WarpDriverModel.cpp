@@ -28,6 +28,8 @@
 #include "WarpDriverModel.hpp"
 
 #include "GenericAgent.hpp"
+#include "GeometricFunctions.hpp"
+#include "LineSegment.hpp"
 #include "OperationalModelType.hpp"
 #include "Point.hpp"
 #include "SimulationError.hpp"
@@ -364,8 +366,7 @@ void WarpDriverModel::ApplyUpdate(const OperationalModelUpdate& update, GenericA
 
 void WarpDriverModel::CheckModelConstraint(
     const GenericAgent& agent,
-    const NeighborhoodSearchType& /*neighborhoodSearch*/,
-    const CollisionGeometry& /*geometry*/) const
+    const InformationForUpdate& /*info*/) const
 {
     const auto* data = std::get_if<WarpDriverModelData>(&agent.model);
     if(!data) {
@@ -385,11 +386,23 @@ void WarpDriverModel::CheckModelConstraint(
     }
 }
 
+InformationRequirements WarpDriverModel::Requirements(const GenericAgent& agent) const
+{
+    const auto& data = std::get<WarpDriverModelData>(agent.model);
+    // Walls matter for steering (within 3x the agent radius) and for the short
+    // detour step validity check.
+    return {.neighborRadius = _cutOffRadius, .wallRadius = 3.0 * data.radius};
+}
+
+InformationRequirements WarpDriverModel::ConstraintRequirements(const GenericAgent&) const
+{
+    return {};
+}
+
 OperationalModelUpdate WarpDriverModel::ComputeNewPosition(
     double dT,
     const GenericAgent& ped,
-    const CollisionGeometry& geometry,
-    const NeighborhoodSearchType& neighborhoodSearch) const
+    const InformationForUpdate& info) const
 {
     const auto& agentData = std::get<WarpDriverModelData>(ped.model);
     const double speed = agentData.v0;
@@ -418,7 +431,7 @@ OperationalModelUpdate WarpDriverModel::ComputeNewPosition(
     const double dtSample = _timeHorizon / std::max(_numSamples - 1, 1);
 
     // === Step 2: Perceive - build collision probability field ===
-    const auto neighbors = neighborhoodSearch.GetNeighboringAgents(ped.pos, _cutOffRadius);
+    const auto& neighbors = info.neighbors;
 
     // Short-range repulsion: not part of the original Wolinski et al. (2016)
     // model, which is purely anticipatory. Added as a practical safety net
@@ -598,7 +611,7 @@ OperationalModelUpdate WarpDriverModel::ComputeNewPosition(
     newVelWorld = newVelWorld + repulsion;
 
     // Boundary avoidance: steer agents away from walls
-    const auto& walls = geometry.LineSegmentsInApproxDistanceTo(ped.pos);
+    const auto& walls = info.walls;
     for(const auto& wall : walls) {
         const Point wallVec = wall.p2 - wall.p1;
         const double wallLen2 = wallVec.ScalarProduct(wallVec);
@@ -639,15 +652,23 @@ OperationalModelUpdate WarpDriverModel::ComputeNewPosition(
         Point detourDir = (lateral * 0.8 + desiredDir * 0.2).Normalized();
         Point detourVel = detourDir * agentData.v0 * 0.5;
         Point newPos = ped.pos + detourVel * dT;
+        // A short step starting inside the walkable area leaves it iff it
+        // crosses a wall; every wall such a step could reach is in info.walls.
+        const auto leavesWalkableArea = [&walls, &ped](const Point& to) {
+            const LineSegment step(ped.pos, to);
+            return std::any_of(walls.begin(), walls.end(), [&step](const auto& wall) {
+                return intersects(step, wall);
+            });
+        };
         // If detour would leave the walkable area, try the other side
-        if(!geometry.InsideGeometry(newPos)) {
+        if(leavesWalkableArea(newPos)) {
             detourSide = -detourSide;
             lateral = Point{-desiredDir.y * detourSide, desiredDir.x * detourSide};
             detourDir = (lateral * 0.8 + desiredDir * 0.2).Normalized();
             detourVel = detourDir * agentData.v0 * 0.5;
             newPos = ped.pos + detourVel * dT;
             // If both sides fail, just creep toward goal
-            if(!geometry.InsideGeometry(newPos)) {
+            if(leavesWalkableArea(newPos)) {
                 newPos = ped.pos + desiredDir * agentData.v0 * 0.1 * dT;
                 detourDir = desiredDir;
             }

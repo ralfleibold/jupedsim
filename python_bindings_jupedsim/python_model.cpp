@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "python_model.hpp"
 
-#include "CollisionGeometry.hpp"
 #include "GenericAgent.hpp"
-#include "NeighborhoodSearch.hpp"
+#include "InformationForUpdate.hpp"
+#include "LineSegment.hpp"
 #include "OperationalModel.hpp"
 #include "OperationalModels/CustomModel/CustomModelData.hpp"
 #include "OperationalModels/CustomModel/CustomModelUpdate.hpp"
@@ -13,6 +13,8 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include <optional>
+#include <span>
 #include <stdexcept>
 #include <tuple>
 #include <utility>
@@ -74,6 +76,29 @@ void GilSafePyObject::Set(py::object obj)
     _obj = std::move(obj);
 }
 
+namespace
+{
+InformationRequirements
+requirements_from_python(const py::object& model, const char* adapter, const GenericAgent& agent)
+{
+    py::gil_scoped_acquire gil;
+
+    const auto [neighborRadius, wallRadius] =
+        py::cast<std::tuple<std::optional<double>, std::optional<double>>>(
+            model.attr(adapter)(py::cast(agent)));
+    return {.neighborRadius = neighborRadius, .wallRadius = wallRadius};
+}
+
+py::list walls_as_python_list(std::span<const LineSegment> walls)
+{
+    py::list result{};
+    for(const auto& wall : walls) {
+        result.append(py::cast(wall));
+    }
+    return result;
+}
+} // namespace
+
 PythonModel::PythonModel(py::object model) : _model(std::move(model))
 {
     py::gil_scoped_acquire gil;
@@ -81,26 +106,32 @@ PythonModel::PythonModel(py::object model) : _model(std::move(model))
         throw std::invalid_argument("_PythonModel requires a CustomOperationalModel instance");
     }
     if(!py::hasattr(_model, "_compute_new_position") ||
-       !py::hasattr(_model, "_check_model_constraint")) {
+       !py::hasattr(_model, "_check_model_constraint") ||
+       !py::hasattr(_model, "_information_requirements") ||
+       !py::hasattr(_model, "_constraint_requirements")) {
         throw std::invalid_argument("_PythonModel requires a CustomOperationalModel instance");
     }
+}
+
+InformationRequirements PythonModel::Requirements(const GenericAgent& agent) const
+{
+    return requirements_from_python(_model, "_information_requirements", agent);
+}
+
+InformationRequirements PythonModel::ConstraintRequirements(const GenericAgent& agent) const
+{
+    return requirements_from_python(_model, "_constraint_requirements", agent);
 }
 
 OperationalModelUpdate PythonModel::ComputeNewPosition(
     double dT,
     const GenericAgent& agent,
-    const CollisionGeometry& geometry,
-    const NeighborhoodSearch<GenericAgent>& neighborhoodSearch) const
+    const InformationForUpdate& info) const
 {
     py::gil_scoped_acquire gil;
 
-    py::object pythonAgent = py::cast(agent);
-    py::object pythonGeometry = py::cast(&geometry, py::return_value_policy::reference);
-    py::object pythonNeighborhoodSearch =
-        py::cast((&neighborhoodSearch), py::return_value_policy::reference);
-
     py::object update = _model.attr("_compute_new_position")(
-        dT, pythonAgent, pythonGeometry, pythonNeighborhoodSearch);
+        dT, py::cast(agent), py::cast(info.neighbors), walls_as_python_list(info.walls));
 
     return CustomModelUpdate{GilSafePyObject{std::move(update)}};
 }
@@ -159,17 +190,12 @@ void PythonModel::ApplyUpdate(const OperationalModelUpdate& update, GenericAgent
 
 void PythonModel::CheckModelConstraint(
     const GenericAgent& agent,
-    const NeighborhoodSearch<GenericAgent>& neighborhoodSearch,
-    const CollisionGeometry& geometry) const
+    const InformationForUpdate& info) const
 {
     py::gil_scoped_acquire gil;
 
-    py::object pythonAgent = py::cast(agent);
-    py::object pythonNeighborhoodSearch =
-        py::cast((&neighborhoodSearch), py::return_value_policy::reference);
-    py::object pythonGeometry = py::cast(&geometry, py::return_value_policy::reference);
-
-    _model.attr("_check_model_constraint")(pythonAgent, pythonNeighborhoodSearch, pythonGeometry);
+    _model.attr("_check_model_constraint")(
+        py::cast(agent), py::cast(info.neighbors), walls_as_python_list(info.walls));
 }
 
 void init_python_model(py::module_& m)

@@ -57,6 +57,8 @@ from jupedsim.models.custom_model import (
     CustomModelAgentParameters,
     CustomModelAgentState,
     CustomOperationalModel,
+    InformationForUpdate,
+    InformationRequirements,
 )
 from jupedsim.models.generalized_centrifugal_force import (
     GeneralizedCentrifugalForceModel,
@@ -73,7 +75,6 @@ from jupedsim.models.warp_driver import (
     WarpDriverModelAgentParameters,
     WarpDriverModelState,
 )
-from jupedsim.neighborhood import NeighborhoodSearch
 from jupedsim.recording import Recording, RecordingAgent, RecordingFrame
 from jupedsim.routing import RoutingEngine
 from jupedsim.serialization import TrajectoryWriter
@@ -123,7 +124,6 @@ __all__ = [
     "IncorrectParameterError",
     "JourneyDescription",
     "NegativeValueError",
-    "NeighborhoodSearch",
     "NotifiableQueueStage",
     "OverlappingCirclesError",
     "Recording",
@@ -159,6 +159,8 @@ __all__ = [
     "CustomModelAgentParameters",
     "CustomModelAgentState",
     "CustomOperationalModel",
+    "InformationForUpdate",
+    "InformationRequirements",
     "WaitingSetStage",
     "WaitingSetState",
     "WaypointStage",

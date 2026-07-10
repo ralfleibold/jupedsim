@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
 
-#include "CollisionGeometry.hpp"
-#include "NeighborhoodSearch.hpp"
 #include "OperationalModel.hpp"
 #include "OperationalModelType.hpp"
 #include "Point.hpp"
@@ -16,8 +14,6 @@ struct GenericAgent;
 class WarpDriverModel : public OperationalModel
 {
 public:
-    using NeighborhoodSearchType = NeighborhoodSearch<GenericAgent>;
-
     /// 3-component space-time point/vector used internally
     struct SpaceTimePoint {
         double x{};
@@ -72,16 +68,17 @@ public:
 
     OperationalModelType Type() const override;
 
+    InformationRequirements Requirements(const GenericAgent& agent) const override;
+
+    InformationRequirements ConstraintRequirements(const GenericAgent& agent) const override;
+
     OperationalModelUpdate ComputeNewPosition(
         double dT,
         const GenericAgent& ped,
-        const CollisionGeometry& geometry,
-        const NeighborhoodSearchType& neighborhoodSearch) const override;
+        const InformationForUpdate& info) const override;
 
     void ApplyUpdate(const OperationalModelUpdate& update, GenericAgent& agent) const override;
 
-    void CheckModelConstraint(
-        const GenericAgent& agent,
-        const NeighborhoodSearchType& neighborhoodSearch,
-        const CollisionGeometry& geometry) const override;
+    void CheckModelConstraint(const GenericAgent& agent, const InformationForUpdate& info)
+        const override;
 };

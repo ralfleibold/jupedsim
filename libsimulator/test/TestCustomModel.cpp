@@ -44,11 +44,17 @@ struct ConstCharPointerToStringPayload {
 class MinimalCustomModel : public CustomModel
 {
 public:
+    InformationRequirements Requirements(const GenericAgent&) const override { return {}; }
+
+    InformationRequirements ConstraintRequirements(const GenericAgent&) const override
+    {
+        return {};
+    }
+
     OperationalModelUpdate ComputeNewPosition(
         double dT,
         const GenericAgent& agent,
-        const CollisionGeometry&,
-        const NeighborhoodSearch<GenericAgent>&) const override
+        const InformationForUpdate&) const override
     {
         const auto& state = std::get<CustomModelData>(agent.model).Get<MinimalState>();
         const auto position = agent.pos + state.velocity * dT;
@@ -67,12 +73,7 @@ public:
         state.applications = customUpdate.applications;
     }
 
-    void CheckModelConstraint(
-        const GenericAgent&,
-        const NeighborhoodSearch<GenericAgent>&,
-        const CollisionGeometry&) const override
-    {
-    }
+    void CheckModelConstraint(const GenericAgent&, const InformationForUpdate&) const override {}
 };
 
 GenericAgent MakeAgent(GenericAgent::Model model)

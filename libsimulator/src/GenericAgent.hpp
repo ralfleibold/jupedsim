@@ -5,7 +5,6 @@
 #include "CollisionFreeSpeedModelV2Data.hpp"
 #include "CollisionFreeSpeedModelV3Data.hpp"
 #include "GeneralizedCentrifugalForceModelData.hpp"
-#include "OperationalModel.hpp"
 #include "OperationalModels/CustomModel/CustomModelData.hpp"
 #include "OperationalModels/OperationalModelType.hpp"
 #include "Point.hpp"

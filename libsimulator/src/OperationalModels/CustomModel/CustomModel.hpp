@@ -6,10 +6,10 @@
 /// Base class for operational models implemented outside libsimulator.
 ///
 /// Derive from this class when a model is not part of the built-in model set. The derived model
-/// still implements the pure virtual interface inherited from OperationalModel:
-/// ComputeNewPosition(), ApplyUpdate(), and CheckModelConstraint(). This class only fixes the model
-/// type to OperationalModelType::CUSTOM_MODEL so custom models do not need to repeat that
-/// boilerplate.
+/// still implements the pure virtual interface inherited from OperationalModel: Requirements(),
+/// ConstraintRequirements(), ComputeNewPosition(), ApplyUpdate(), and CheckModelConstraint().
+/// This class only fixes the model type to OperationalModelType::CUSTOM_MODEL so custom models do
+/// not need to repeat that boilerplate.
 ///
 /// Per-agent custom state should be stored in GenericAgent::model as CustomModelData. Custom model
 /// updates should be returned from ComputeNewPosition() as CustomModelUpdate. Both types store
@@ -17,24 +17,26 @@
 /// retrieve them with the exact typed accessors.
 ///
 /// Payload types must be copy-constructible because GenericAgent values are copied during
-/// simulation queries, e.g. by NeighborhoodSearch.
+/// simulation queries, e.g. into InformationForUpdate::neighbors.
 ///
 /// @code
 /// class MyModel : public CustomModel
 /// {
 /// public:
+///     InformationRequirements Requirements(const GenericAgent& agent) const override;
+///
+///     InformationRequirements ConstraintRequirements(const GenericAgent& agent) const override;
+///
 ///     OperationalModelUpdate ComputeNewPosition(
 ///         double dT,
 ///         const GenericAgent& agent,
-///         const CollisionGeometry& geometry,
-///         const NeighborhoodSearch<GenericAgent>& neighborhoodSearch) const override;
+///         const InformationForUpdate& info) const override;
 ///
 ///     void ApplyUpdate(const OperationalModelUpdate& update, GenericAgent& agent) const override;
 ///
 ///     void CheckModelConstraint(
 ///         const GenericAgent& agent,
-///         const NeighborhoodSearch<GenericAgent>& neighborhoodSearch,
-///         const CollisionGeometry& geometry) const override;
+///         const InformationForUpdate& info) const override;
 /// };
 /// @endcode
 ///

@@ -7,6 +7,7 @@ from jupedsim.geometry import LineSegment
 from jupedsim.models.custom_model import (
     CustomModelAgentState,
     CustomOperationalModel,
+    InformationRequirements,
 )
 
 
@@ -182,17 +183,18 @@ class PythonSocialForceModel(CustomOperationalModel):
 
         return (fx, fy)
 
-    def compute_new_position(
-        self, dt: float, agent, geometry, neighborhood_search
-    ):
+    def information_requirements(self, ped) -> InformationRequirements:
+        """Neighbors within social-force range, walls for obstacle forces."""
+        return InformationRequirements(neighbor_radius=2.0, wall_radius=5.0)
+
+    def compute_new_position(self, dt: float, agent, info):
         """
         Compute new position using Social Force Model.
 
         Args:
             dt: time step [s]
             agent: Agent (current agent, exposing position, target and model)
-            geometry: Geometry for wall/obstacle queries
-            neighborhood_search: NeighborhoodSearch for neighbor queries
+            info: InformationForUpdate with the requested neighbors and walls
 
         Returns:
             PythonSocialForceModelState carrying the full per-agent state with
@@ -218,17 +220,14 @@ class PythonSocialForceModel(CustomOperationalModel):
         )
 
         ## Add social forces from neighboring agents
-        neighboring_agents = neighborhood_search.get_neighboring_agents(
-            agent.position, 2.0
-        )
-
-        for neighbor in neighboring_agents:
+        for neighbor in info.neighbors:
             fx, fy = self._social_force(agent, neighbor)
             acc_x += fx / state.mass
             acc_y += fy / state.mass
 
-        # Add obstacle forces (from geometry)
-        for wall in geometry.get_walls_in_distance_to(agent.position, 5.0):
+        # Add obstacle forces; the force decays exponentially with distance,
+        # so the over-inclusive wall list needs no exact-radius filtering.
+        for wall in info.walls:
             fx, fy = self._obstacle_force(agent, wall)
             acc_x += fx / state.mass
             acc_y += fy / state.mass
@@ -247,6 +246,6 @@ class PythonSocialForceModel(CustomOperationalModel):
 
         return replace(state, position=new_position, velocity=new_velocity)
 
-    def check_model_constraint(self, ped, neighborhood_search, geometry):
+    def check_model_constraint(self, ped, info):
         """Check model constraints (optional)."""
         pass

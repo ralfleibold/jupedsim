@@ -3,17 +3,13 @@
 
 #include "CollisionGeometry.hpp"
 #include "GenericAgent.hpp"
+#include "InformationForUpdate.hpp"
 #include "NeighborhoodSearch.hpp"
 #include "OperationalModel.hpp"
 #include "OperationalModelType.hpp"
 
-#include <boost/iterator/zip_iterator.hpp>
-#include <boost/tuple/tuple.hpp>
-
-#include <algorithm>
-#include <iterator>
+#include <cstddef>
 #include <memory>
-#include <optional>
 #include <utility>
 #include <vector>
 
@@ -40,26 +36,29 @@ public:
         const CollisionGeometry& geometry,
         AgentContainer<GenericAgent>& agents) const
     {
-        std::vector<std::optional<OperationalModelUpdate>> updates{};
-        updates.reserve(agents.size());
+        const auto agentCount = agents.size();
 
-        std::transform(
-            std::begin(agents),
-            std::end(agents),
-            std::back_inserter(updates),
-            [this, &dT, &geometry, &neighborhoodSearch](const auto& agent) {
-                return _model->ComputeNewPosition(dT, agent, geometry, neighborhoodSearch);
-            });
+        // Phase 1: gather each agent's requested information. Batching the
+        // world queries ahead of the model calls keeps the models pure
+        // functions of (dT, agent, info).
+        std::vector<InformationForUpdate> infos{};
+        infos.reserve(agentCount);
+        for(const auto& agent : agents) {
+            infos.push_back(
+                Gather(agent, _model->Requirements(agent), neighborhoodSearch, geometry));
+        }
 
-        std::for_each(
-            boost::make_zip_iterator(boost::make_tuple(std::begin(agents), std::begin(updates))),
-            boost::make_zip_iterator(boost::make_tuple(std::end(agents), std::end(updates))),
-            [this](auto tup) {
-                auto& [agent, update] = tup;
-                if(update) {
-                    _model->ApplyUpdate(*update, agent);
-                }
-            });
+        // Phase 2: compute all updates from the frozen pre-step state.
+        std::vector<OperationalModelUpdate> updates{};
+        updates.reserve(agentCount);
+        for(std::size_t i = 0; i < agentCount; ++i) {
+            updates.push_back(_model->ComputeNewPosition(dT, agents[i], infos[i]));
+        }
+
+        // Phase 3: apply.
+        for(std::size_t i = 0; i < agentCount; ++i) {
+            _model->ApplyUpdate(updates[i], agents[i]);
+        }
     }
 
     void ValidateAgent(
@@ -67,6 +66,30 @@ public:
         const NeighborhoodSearch<GenericAgent>& neighborhoodSearch,
         const CollisionGeometry& geometry) const
     {
-        _model->CheckModelConstraint(agent, neighborhoodSearch, geometry);
+        _model->CheckModelConstraint(
+            agent,
+            Gather(agent, _model->ConstraintRequirements(agent), neighborhoodSearch, geometry));
+    }
+
+private:
+    InformationForUpdate Gather(
+        const GenericAgent& agent,
+        const InformationRequirements& requirements,
+        const NeighborhoodSearch<GenericAgent>& neighborhoodSearch,
+        const CollisionGeometry& geometry) const
+    {
+        InformationForUpdate info{};
+        if(requirements.neighborRadius) {
+            info.neighbors =
+                neighborhoodSearch.GetNeighboringAgents(agent.pos, *requirements.neighborRadius);
+        }
+        if(requirements.wallRadius) {
+            // The approximate grid delivers all wall segments within its build
+            // radius (4 m) of the agent -- over-inclusive, and silently capped
+            // for larger requests, matching the previous direct-query behavior.
+            const auto& walls = geometry.LineSegmentsInApproxDistanceTo(agent.pos);
+            info.walls = std::span<const LineSegment>(walls.data(), walls.size());
+        }
+        return info;
     }
 };

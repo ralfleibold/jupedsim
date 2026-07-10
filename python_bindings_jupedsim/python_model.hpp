@@ -44,18 +44,20 @@ class PythonModel final : public CustomModel
 public:
     explicit PythonModel(py::object model);
 
+    InformationRequirements Requirements(const GenericAgent& agent) const override;
+
+    InformationRequirements ConstraintRequirements(const GenericAgent& agent) const override;
+
     OperationalModelUpdate ComputeNewPosition(
         double dT,
         const GenericAgent& agent,
-        const CollisionGeometry& geometry,
-        const NeighborhoodSearch<GenericAgent>& neighborhoodSearch) const override;
+        const InformationForUpdate& info) const override;
 
     void ApplyUpdate(const OperationalModelUpdate& update, GenericAgent& agent) const override;
 
     void CheckModelConstraint(
         const GenericAgent& agent,
-        const NeighborhoodSearch<GenericAgent>& neighborhoodSearch,
-        const CollisionGeometry& geometry) const override;
+        const InformationForUpdate& info) const override;
 
 private:
     py::object _model;

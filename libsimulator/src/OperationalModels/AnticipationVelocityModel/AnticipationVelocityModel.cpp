@@ -3,7 +3,6 @@
 
 #include "AnticipationVelocityModelData.hpp"
 #include "AnticipationVelocityModelUpdate.hpp"
-#include "CollisionGeometry.hpp"
 #include "GenericAgent.hpp"
 #include "GeometricFunctions.hpp"
 #include "LineSegment.hpp"
@@ -31,14 +30,25 @@ OperationalModelType AnticipationVelocityModel::Type() const
     return OperationalModelType::ANTICIPATION_VELOCITY_MODEL;
 }
 
+InformationRequirements AnticipationVelocityModel::Requirements(const GenericAgent&) const
+{
+    return {.neighborRadius = _cutOffRadius, .wallRadius = _cutOffRadius};
+}
+
+InformationRequirements
+AnticipationVelocityModel::ConstraintRequirements(const GenericAgent& agent) const
+{
+    const auto& model = std::get<AnticipationVelocityModelData>(agent.model);
+    return {.neighborRadius = 2., .wallRadius = model.radius};
+}
+
 OperationalModelUpdate AnticipationVelocityModel::ComputeNewPosition(
     double dT,
     const GenericAgent& ped,
-    const CollisionGeometry& geometry,
-    const NeighborhoodSearchType& neighborhoodSearch) const
+    const InformationForUpdate& info) const
 {
-    auto neighborhood = neighborhoodSearch.GetNeighboringAgents(ped.pos, _cutOffRadius);
-    const auto& boundary = geometry.LineSegmentsInApproxDistanceTo(ped.pos);
+    auto neighborhood = info.neighbors;
+    const auto& boundary = info.walls;
 
     // Remove any agent from the neighborhood that is obstructed by geometry and the current
     // agent
@@ -52,8 +62,8 @@ OperationalModelUpdate AnticipationVelocityModel::ComputeNewPosition(
                 }
                 const auto agent_to_neighbor = LineSegment(ped.pos, neighbor.pos);
                 if(std::find_if(
-                       boundary.cbegin(),
-                       boundary.cend(),
+                       boundary.begin(),
+                       boundary.end(),
                        [&agent_to_neighbor](const auto& boundary_segment) {
                            return intersects(agent_to_neighbor, boundary_segment);
                        }) != boundary.end()) {
@@ -136,8 +146,7 @@ Point AnticipationVelocityModel::UpdateDirection(
 
 void AnticipationVelocityModel::CheckModelConstraint(
     const GenericAgent& agent,
-    const NeighborhoodSearchType& neighborhoodSearch,
-    const CollisionGeometry& geometry) const
+    const InformationForUpdate& info) const
 {
     const auto& model = std::get<AnticipationVelocityModelData>(agent.model);
     const auto r = model.radius;
@@ -181,8 +190,7 @@ void AnticipationVelocityModel::CheckModelConstraint(
     constexpr double reactionTimeMax = 1.0;
     validateConstraint(reactionTime, reactionTimeMin, reactionTimeMax, "reactionTime", true);
 
-    const auto neighbors = neighborhoodSearch.GetNeighboringAgents(agent.pos, 2);
-    for(const auto& neighbor : neighbors) {
+    for(const auto& neighbor : info.neighbors) {
         if(agent.id == neighbor.id) {
             continue;
         }
@@ -198,8 +206,12 @@ void AnticipationVelocityModel::CheckModelConstraint(
         }
     }
 
-    const auto lineSegments = geometry.LineSegmentsInDistanceTo(r, agent.pos);
-    if(std::begin(lineSegments) != std::end(lineSegments)) {
+    // info.walls may be over-inclusive, apply the exact distance here.
+    const auto tooClose =
+        std::any_of(info.walls.begin(), info.walls.end(), [&agent, r](const auto& segment) {
+            return segment.DistTo(agent.pos) <= r;
+        });
+    if(tooClose) {
         throw SimulationError(
             "Model constraint violation: Agent {} too close to geometry boundaries, distance "
             "<= {}",
@@ -311,7 +323,7 @@ Point AnticipationVelocityModel::HandleWallAvoidance(
     const Point& direction,
     const Point& agentPosition,
     double agentRadius,
-    const std::vector<LineSegment>& boundary,
+    std::span<const LineSegment> boundary,
     double wallBufferDistance) const
 {
     const double criticalWallDistance = wallBufferDistance + agentRadius;
