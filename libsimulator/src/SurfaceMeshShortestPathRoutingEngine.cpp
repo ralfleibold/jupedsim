@@ -39,17 +39,18 @@ SurfaceMeshShortestPathRoutingEngine::GetShortestPath(const Point3D& source, con
             "GetShortestPath(): target does not project onto the walkable surface.");
     }
 
-    // TODO: Implement cache for sequence tree.
-    using Traits = CGAL::Surface_mesh_shortest_path_traits<SurfaceKernel, SurfaceMesh>;
-    using ShortestPath = CGAL::Surface_mesh_shortest_path<Traits>;
-    ShortestPath shortest_path(_geometry.mesh());
-    const auto to_loc = shortest_path.locate(target_below.point, _geometry.aabb_tree());
-    shortest_path.add_source_point(to_loc);
-    shortest_path.build_sequence_tree();
+    auto it = _cache.find(target);
+    if(it == _cache.end()) {
+        auto shortest_path = std::make_unique<ShortestPath>(_geometry.mesh());
+        const auto to_loc = shortest_path->locate(target_below.point, _geometry.aabb_tree());
+        shortest_path->add_source_point(to_loc);
+        shortest_path->build_sequence_tree();
+        it = _cache.emplace(target, std::move(shortest_path)).first;
+    }
 
-    const auto from_loc = shortest_path.locate(from_below.point, _geometry.aabb_tree());
+    const auto from_loc = it->second->locate(from_below.point, _geometry.aabb_tree());
     std::vector<Point3D> path;
-    const auto result = shortest_path.shortest_path_points_to_source_points(
+    const auto result = it->second->shortest_path_points_to_source_points(
         from_loc.first, from_loc.second, std::back_inserter(path));
     // CGAL returns the cost directly. No separate calculation needed.
     return {std::move(path), result.first};

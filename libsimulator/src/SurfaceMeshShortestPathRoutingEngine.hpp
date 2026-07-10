@@ -6,6 +6,7 @@
 
 #include <CGAL/Surface_mesh_shortest_path.h>
 
+#include <map>
 #include <tuple>
 #include <vector>
 
@@ -29,4 +30,9 @@ public:
 
 private:
     const Geometry3D& _geometry;
+
+    // cache
+    using Traits = CGAL::Surface_mesh_shortest_path_traits<SurfaceKernel, SurfaceMesh>;
+    using ShortestPath = CGAL::Surface_mesh_shortest_path<Traits>;
+    std::map<Location, std::unique_ptr<ShortestPath>> _cache{};
 };
