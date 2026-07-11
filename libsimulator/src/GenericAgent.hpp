@@ -52,6 +52,11 @@ struct GenericAgent {
     /// lifts, so 2D-era checks against it are no-ops there.
     double z{0};
 
+    /// Anchored height of the stage behind `target` (BaseStage::z), written
+    /// by the strategical level together with `target`. Routing queries use
+    /// it to pick the target's sheet. 0 on the 2D path and on flat lifts.
+    double targetZ{0};
+
     using Model = std::variant<
         GeneralizedCentrifugalForceModelData,
         CollisionFreeSpeedModelData,

@@ -422,3 +422,47 @@ TEST(Simulation, GroundExitDoesNotSwallowAgentOnTheFloorAbove)
     EXPECT_EQ(simulation.AgentCount(), 1u);
     EXPECT_DOUBLE_EQ(simulation.Agents().front().z, 3.0);
 }
+
+TEST(Simulation, RoutesToTheStagesSheetNotToTheGroundBelowIt)
+{
+    auto geometry = std::make_unique<Geometry3D>();
+    geometry->initialize_from_mesh(two_storey_mesh());
+    auto routingEngine = std::make_unique<SurfaceMeshShortestPathRoutingEngine>(*geometry);
+    Simulation simulation(
+        std::make_unique<CollisionFreeSpeedModel>(CollisionFreeSpeedModel{8.0, 0.1, 5.0, 0.02}),
+        std::move(geometry),
+        std::move(routingEngine),
+        0.01,
+        false);
+
+    // The waypoint sits at (9,2) where two sheets are stacked (ground z=0,
+    // upper floor z=3); the z-hint anchors it on the upper floor. The agent
+    // starts on the upper floor 8 m straight north of it.
+    const auto waypointId = simulation.AddStage(WaypointDescription{{9, 2}, 0.5}, 3.0);
+    const auto journeyId = simulation.AddJourney({{waypointId, NonTransitionDescription{}}});
+    simulation.AddAgent(
+        GenericAgent(
+            GenericAgent::ID::Invalid,
+            journeyId,
+            waypointId,
+            {9, 10},
+            CollisionFreeSpeedModelData{}),
+        3.0);
+
+    // Routed on the upper sheet the path is the straight line south along
+    // x=9. CGAL reports the polyline including face-crossing points, and the
+    // segment crosses exactly one edge: the diagonal u5-r2 (y = 2x - 12) of
+    // the quad over the ground floor, at (9,6). Anchored on the ground below
+    // instead, the geodesic would detour east through the ramp.
+    simulation.Iterate();
+    const auto& agent = simulation.Agents().front();
+    EXPECT_NEAR(agent.destination.x, 9.0, 1e-9);
+    EXPECT_NEAR(agent.destination.y, 6.0, 1e-9);
+
+    // The walk stays on the upper floor all the way to the waypoint.
+    for(int step = 0; step < 900; ++step) {
+        simulation.Iterate();
+    }
+    EXPECT_LT((agent.pos - Point{9, 2}).Norm(), 0.5);
+    EXPECT_NEAR(agent.z, 3.0, 1e-12);
+}

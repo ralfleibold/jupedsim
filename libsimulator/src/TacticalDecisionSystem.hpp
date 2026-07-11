@@ -17,8 +17,8 @@ public:
 
     /// @p surface is the Geometry3D when the simulation runs on the surface
     /// (source height comes from the agent's region anchor), nullptr on the
-    /// legacy 2D path (z=0, exact for flat lifts). Target z stays 0 until
-    /// stages carry a height (Road-to-full-3D, B7).
+    /// legacy 2D path (z=0, exact for flat lifts). The target's height is the
+    /// stage's anchored z, carried on the agent by the strategical level.
     void Run(RoutingEngine3D& routingEngine, auto&& agents, const Geometry3D* surface) const
     {
         for(auto& agent : agents) {
@@ -36,8 +36,8 @@ public:
                 }
                 z = anchor.point.z();
             }
-            agent.destination =
-                routingEngine.GetNextWaypoint({agent.pos.x, agent.pos.y, z}, {dest.x, dest.y, 0.0});
+            agent.destination = routingEngine.GetNextWaypoint(
+                {agent.pos.x, agent.pos.y, z}, {dest.x, dest.y, agent.targetZ});
         }
     }
 };
