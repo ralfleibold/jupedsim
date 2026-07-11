@@ -22,6 +22,12 @@
 class Journey;
 class BaseStage;
 
+/// Vertical tolerance for matching a sheet to a z value: sheet selection from
+/// z-hints (agents, stages, queries) and the z-band of stage-reached checks.
+/// Interim hard-coded value -- whether it becomes configurable is a team
+/// follow-up (Road-to-full-3D).
+inline constexpr double ZHintTolerance{0.25};
+
 struct GenericAgent {
     using ID = jps::UniqueID<GenericAgent>;
     ID id{};
@@ -40,6 +46,11 @@ struct GenericAgent {
     /// Disambiguates stacked floors sharing the same (x,y). The 2D path and
     /// single-region geometries (every flat polygon lift) always use 0.
     std::size_t regionId{0};
+
+    /// On-surface height of the agent's anchor, maintained by the surface
+    /// path (AddAgent, run_surface_step). Stays 0 on the 2D path and on flat
+    /// lifts, so 2D-era checks against it are no-ops there.
+    double z{0};
 
     using Model = std::variant<
         GeneralizedCentrifugalForceModelData,

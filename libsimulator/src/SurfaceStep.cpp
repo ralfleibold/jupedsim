@@ -37,6 +37,7 @@ void run_surface_step(
         const auto anchor =
             geometry.walk_on_surface(agent.regionId, {from.x, from.y}, {agent.pos.x, agent.pos.y});
         agent.regionId = geometry.region_of(anchor.face);
+        agent.z = anchor.point.z();
         anchors.push_back(anchor.point);
     }
     gatherer.update(agents, std::move(anchors));

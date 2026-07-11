@@ -32,9 +32,8 @@ public:
     }
 
     /// Surface counterpart of Run: slot surroundings come from the surface
-    /// gatherer. Slots anchor in region 0 -- the single-region guard
-    /// (Simulation::AddAgent) makes that the only sheet; per-region stage
-    /// anchoring is an API decision still ahead (Road-to-full-3D, C8).
+    /// gatherer. Slots anchor on the sheet nearest the stage's z (the height
+    /// Simulation::AddStage anchored the stage at).
     void RunOnSurface(
         StageManager& stageManager,
         const InformationGatherer3D& gatherer,
@@ -42,15 +41,13 @@ public:
     {
         std::vector<LineSegment> wallBuffer{};
         update_stages(
-            stageManager, [&gatherer, &geometry, &wallBuffer](Point p, double radius) {
-                const auto anchor = geometry.locate_in_region(0, {p.x, p.y});
+            stageManager, [&gatherer, &geometry, &wallBuffer](Point p, double radius, double z) {
+                const auto anchor = geometry.locate_near_z({p.x, p.y}, z, ZHintTolerance);
                 if(anchor.face == SurfaceMesh::null_face()) {
                     throw SimulationError("Stage slot {} is not on the walkable surface", p);
                 }
                 return gatherer.gather_at(
-                    anchor.point,
-                    {.neighborRadius = radius, .wallRadius = radius},
-                    wallBuffer);
+                    anchor.point, {.neighborRadius = radius, .wallRadius = radius}, wallBuffer);
             });
     }
 

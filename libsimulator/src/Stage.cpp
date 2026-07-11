@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <cstddef>
 #include <list>
 #include <utility>
@@ -89,7 +90,7 @@ Waypoint::Waypoint(Point position_, double distance_) : position(position_), dis
 bool Waypoint::IsCompleted(const GenericAgent& agent)
 {
     const auto actual_distance = (agent.pos - position).Norm();
-    return actual_distance <= distance;
+    return actual_distance <= distance && std::abs(agent.z - _z) <= ZHintTolerance;
 }
 
 Point Waypoint::Target(const GenericAgent&)
@@ -115,7 +116,8 @@ Exit::Exit(Polygon area_, std::vector<GenericAgent::ID>& toRemove_)
 
 bool Exit::IsCompleted(const GenericAgent& agent)
 {
-    const bool hasReachedExit = area.IsInside(agent.pos);
+    const bool hasReachedExit =
+        area.IsInside(agent.pos) && std::abs(agent.z - _z) <= ZHintTolerance;
     if(hasReachedExit) {
         toRemove.push_back(agent.id);
     }
@@ -150,7 +152,7 @@ bool NotifiableWaitingSet::IsCompleted(const GenericAgent& agent)
         return true;
     }
     const auto distance = (agent.pos - slots[0]).Norm();
-    return distance <= 1;
+    return distance <= 1 && std::abs(agent.z - _z) <= ZHintTolerance;
 }
 
 Point NotifiableWaitingSet::Target(const GenericAgent& agent)

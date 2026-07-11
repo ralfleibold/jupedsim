@@ -69,6 +69,11 @@ public:
     /// face's plane). `null_face()` if @p xy is outside the region's footprint.
     FaceLocation locate_in_region(std::size_t region_id, const Point2D& xy) const;
 
+    /// Locate @p xy on the sheet whose surface z is nearest to @p z: among all
+    /// faces stacked over @p xy pick the one whose on-surface z deviates least
+    /// from the hint. `null_face()` if no sheet comes within @p tolerance.
+    FaceLocation locate_near_z(const Point2D& xy, double z, double tolerance) const;
+
     /// Re-anchor a horizontal move onto the 3D surface: @p from is in region
     /// @p from_region_id; return the face and on-surface point at @p to. The
     /// move is always a direct step, never around corners. Because the agent

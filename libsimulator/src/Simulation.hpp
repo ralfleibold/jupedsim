@@ -42,9 +42,9 @@ class Simulation
     StageSystem _stageSystem{};
     NeighborhoodSearch<GenericAgent> _neighborhoodSearch{2.2};
     std::unique_ptr<Geometry3D> _geometry3d{};
-    /// The projected 2D view owned by _geometry3d. The operational layer
-    /// (collision handling, position validation) still runs in 2D, so the
-    /// view is required until the 3D surface step replaces it.
+    /// The projected 2D view owned by _geometry3d. Required (non-null) only
+    /// on the 2D operational path; mesh-built geometries in surface mode
+    /// have none.
     const CollisionGeometry* _geometry{};
     std::unique_ptr<RoutingEngine3D> _routingEngine{};
     /// Present iff the operational step runs on the surface (run_in_2d ==
@@ -60,13 +60,15 @@ class Simulation
 public:
     /// Simulation owns @p geometry (the single source of truth); the injected
     /// @p routingEngine must have been constructed against that same geometry
-    /// (it borrows, never owns). @p geometry must carry the projected 2D view
-    /// (collision_geometry() != nullptr, i.e. built from a polygon) as long as
-    /// the operational layer runs in 2D.
+    /// (it borrows, never owns).
     /// @p runIn2d selects the operational path: true (default) = the legacy
     /// 2D gather/apply, false = gather + apply + re-anchor on the surface
     /// mesh. On flat geometry both must produce identical trajectories --
     /// this is the transitional parity switch, removed once 3D is the default.
+    /// The 2D path additionally requires the projected 2D view
+    /// (collision_geometry() != nullptr, i.e. built from a polygon) and a
+    /// single-region geometry; the surface path takes mesh-built,
+    /// multi-region geometries.
     Simulation(
         std::unique_ptr<OperationalModel>&& operationalModel,
         std::unique_ptr<Geometry3D>&& geometry,
@@ -82,7 +84,11 @@ public:
     void SetTracing(bool on);
     void Iterate();
     Journey::ID AddJourney(const std::map<BaseStage::ID, TransitionDescription>& stages);
-    BaseStage::ID AddStage(const StageDescription stageDescription);
+    /// @p zHint disambiguates vertically stacked sheets in surface mode:
+    /// the stage's representative point (waypoint position, exit centroid,
+    /// slots) anchors on the sheet nearest the hint (within ZHintTolerance).
+    /// Ignored on the 2D path.
+    BaseStage::ID AddStage(const StageDescription stageDescription, double zHint = 0.0);
     void MarkAgentForRemoval(GenericAgent::ID id);
     const std::vector<GenericAgent::ID>& RemovedAgents() const;
     size_t AgentCount() const;
@@ -95,7 +101,10 @@ public:
     /// Returns IDs of all agents inside the defined polygon
     /// @param polygon Required to be a simple convex polygon with CCW ordering.
     std::vector<GenericAgent::ID> AgentsInPolygon(const std::vector<Point>& polygon);
-    GenericAgent::ID AddAgent(GenericAgent agent);
+    /// @p zHint disambiguates vertically stacked sheets in surface mode: the
+    /// agent anchors on the sheet whose surface z at agent.pos is nearest the
+    /// hint and within ZHintTolerance. Ignored on the 2D path.
+    GenericAgent::ID AddAgent(GenericAgent agent, double zHint = 0.0);
     const GenericAgent& Agent(GenericAgent::ID id) const;
     GenericAgent& Agent(GenericAgent::ID id);
     AgentContainer<GenericAgent>& Agents();

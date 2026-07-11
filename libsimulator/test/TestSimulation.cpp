@@ -115,8 +115,7 @@ TEST(Simulation, ValidatesNewAgentsInBothModes)
         SCOPED_TRACE(runIn2d ? "2d" : "surface");
         const auto simulation = l_corridor_simulation(false, runIn2d);
         const auto& first = simulation->Agents().front();
-        const auto agent_at = [journeyId = first.journeyId,
-                               stageId = first.stageId](Point pos) {
+        const auto agent_at = [journeyId = first.journeyId, stageId = first.stageId](Point pos) {
             return GenericAgent(
                 GenericAgent::ID::Invalid, journeyId, stageId, pos, CollisionFreeSpeedModelData{});
         };
@@ -138,7 +137,7 @@ TEST(Simulation, ValidatesNewAgentsInBothModes)
 TEST(Simulation, ValidatesNewStagesInBothModes)
 {
     // AddStage rejects positions off the walkable area -- via InsideGeometry
-    // in 2D mode, via the region-0 surface locate in surface mode. Verdicts
+    // in 2D mode, via the z-hint surface locate in surface mode. Verdicts
     // must match for every stage flavor.
     for(const bool runIn2d : {true, false}) {
         SCOPED_TRACE(runIn2d ? "2d" : "surface");
@@ -155,8 +154,7 @@ TEST(Simulation, ValidatesNewStagesInBothModes)
                 ExitDescription{Polygon{std::vector<Point>{{4, 4}, {6, 4}, {6, 6}, {4, 6}}}}),
             SimulationError);
 
-        EXPECT_NO_THROW(
-            simulation->AddStage(NotifiableWaitingSetDescription{{{5, 1}, {6, 1}}}));
+        EXPECT_NO_THROW(simulation->AddStage(NotifiableWaitingSetDescription{{{5, 1}, {6, 1}}}));
         EXPECT_THROW(
             simulation->AddStage(NotifiableWaitingSetDescription{{{5, 1}, {5, 5}}}),
             SimulationError);
@@ -222,8 +220,8 @@ TEST(Simulation, QueueBehaviorMatchesAcrossModes)
             std::move(routingEngine),
             0.01,
             runIn2d);
-        const auto queueId = simulation->AddStage(
-            NotifiableQueueDescription{std::vector<Point>{{6, 1}, {5, 1}}});
+        const auto queueId =
+            simulation->AddStage(NotifiableQueueDescription{std::vector<Point>{{6, 1}, {5, 1}}});
         const auto exitId = simulation->AddStage(
             ExitDescription{Polygon{std::vector<Point>{{8, 9}, {10, 9}, {10, 10}, {8, 10}}}});
         const auto journeyId = simulation->AddJourney(
@@ -276,24 +274,151 @@ TEST(Simulation, QueueBehaviorMatchesAcrossModes)
     EXPECT_EQ(onSurface->AgentCount(), 1u);
 }
 
-TEST(Simulation, RejectsGeometryWithoutThe2DView)
+TEST(Simulation, The2DViewIsRequiredOnlyOnThe2DPath)
 {
-    // Built from a mesh, not a polygon: no projected 2D view. The operational
-    // layer still needs one, so the constructor must refuse.
-    SurfaceMesh mesh{};
-    const auto v0 = mesh.add_vertex({0, 0, 0});
-    const auto v1 = mesh.add_vertex({10, 0, 0});
-    const auto v2 = mesh.add_vertex({10, 10, 0});
-    mesh.add_face(v0, v1, v2);
-    auto geometry = std::make_unique<Geometry3D>();
-    geometry->initialize_from_mesh(std::move(mesh));
-    auto routingEngine = std::make_unique<SurfaceMeshShortestPathRoutingEngine>(*geometry);
-
-    EXPECT_THROW(
-        Simulation(
+    // Built from a mesh, not a polygon: no projected 2D view. The 2D
+    // operational path needs one for collision handling; the surface path
+    // runs entirely on the mesh and must accept such geometry.
+    const auto build = [](bool runIn2d) {
+        SurfaceMesh mesh{};
+        const auto v0 = mesh.add_vertex({0, 0, 0});
+        const auto v1 = mesh.add_vertex({10, 0, 0});
+        const auto v2 = mesh.add_vertex({10, 10, 0});
+        mesh.add_face(v0, v1, v2);
+        auto geometry = std::make_unique<Geometry3D>();
+        geometry->initialize_from_mesh(std::move(mesh));
+        auto routingEngine = std::make_unique<SurfaceMeshShortestPathRoutingEngine>(*geometry);
+        return std::make_unique<Simulation>(
             std::make_unique<CollisionFreeSpeedModel>(CollisionFreeSpeedModel{8.0, 0.1, 5.0, 0.02}),
             std::move(geometry),
             std::move(routingEngine),
-            0.01),
-        SimulationError);
+            0.01,
+            runIn2d);
+    };
+
+    EXPECT_THROW(build(true), SimulationError);
+    EXPECT_NO_THROW(build(false));
+}
+
+namespace
+{
+/// Two-storey geometry as ONE connected mesh (the TestSurfaceStep shape):
+/// ground floor (x in [0,16], y in [0,6], z=0) -> ramp (x in [12,16],
+/// climbing y 6..12 to z=3) -> upper floor in a U whose last part (x in
+/// [6,12], y in [0,12], z=3) lies directly above the ground floor. The
+/// (x,y) overlap forces a two-region split.
+SurfaceMesh two_storey_mesh()
+{
+    SurfaceMesh mesh{};
+    const auto a = mesh.add_vertex(Point3D{0, 0, 0});
+    const auto b = mesh.add_vertex(Point3D{12, 0, 0});
+    const auto c = mesh.add_vertex(Point3D{16, 0, 0});
+    const auto d = mesh.add_vertex(Point3D{16, 6, 0});
+    const auto e = mesh.add_vertex(Point3D{12, 6, 0});
+    const auto f = mesh.add_vertex(Point3D{0, 6, 0});
+    const auto r1 = mesh.add_vertex(Point3D{16, 12, 3});
+    const auto r2 = mesh.add_vertex(Point3D{12, 12, 3});
+    const auto u1 = mesh.add_vertex(Point3D{16, 16, 3});
+    const auto u2 = mesh.add_vertex(Point3D{12, 16, 3});
+    const auto u3 = mesh.add_vertex(Point3D{6, 16, 3});
+    const auto u4 = mesh.add_vertex(Point3D{6, 12, 3});
+    const auto u5 = mesh.add_vertex(Point3D{6, 0, 3});
+    const auto u6 = mesh.add_vertex(Point3D{12, 0, 3});
+
+    const auto add_quad_faces = [&mesh](auto v0, auto v1, auto v2, auto v3) {
+        mesh.add_face(v0, v1, v2);
+        mesh.add_face(v0, v2, v3);
+    };
+    add_quad_faces(a, b, e, f); // ground left
+    add_quad_faces(b, c, d, e); // ground right
+    add_quad_faces(e, d, r1, r2); // ramp
+    add_quad_faces(r2, r1, u1, u2); // upper, ahead of the ramp
+    add_quad_faces(u4, r2, u2, u3); // upper, turning left
+    add_quad_faces(u5, u6, r2, u4); // upper, back over the ground
+    return mesh;
+}
+} // namespace
+
+TEST(Simulation, AddAgentSelectsTheSheetByZHint)
+{
+    auto geometry = std::make_unique<Geometry3D>();
+    geometry->initialize_from_mesh(two_storey_mesh());
+    ASSERT_EQ(geometry->region_count(), 2u);
+    const auto* geo = geometry.get();
+    auto routingEngine = std::make_unique<SurfaceMeshShortestPathRoutingEngine>(*geometry);
+    Simulation simulation(
+        std::make_unique<CollisionFreeSpeedModel>(CollisionFreeSpeedModel{8.0, 0.1, 5.0, 0.02}),
+        std::move(geometry),
+        std::move(routingEngine),
+        0.01,
+        false);
+
+    // Exit on the ground floor, outside the overlapped strip x in [6,12].
+    const auto exitId = simulation.AddStage(
+        ExitDescription{Polygon{std::vector<Point>{{0, 0}, {2, 0}, {2, 2}, {0, 2}}}});
+    const auto journeyId = simulation.AddJourney({{exitId, NonTransitionDescription{}}});
+    const auto agent_at = [journeyId, exitId](Point pos) {
+        return GenericAgent(
+            GenericAgent::ID::Invalid, journeyId, exitId, pos, CollisionFreeSpeedModelData{});
+    };
+
+    // (9, 3) has two sheets: the ground floor at z=0 and the upper floor at
+    // z=3. The z-hint picks the sheet; the two agents are stacked in (x,y)
+    // yet do not collide (outside the vertical interaction band).
+    const auto groundId = simulation.AddAgent(agent_at({9, 3}));
+    const auto upperId = simulation.AddAgent(agent_at({9, 3}), 3.1);
+
+    const auto sheet_z = [geo, &simulation](GenericAgent::ID id) {
+        const auto& agent = simulation.Agent(id);
+        return geo->locate_in_region(agent.regionId, {agent.pos.x, agent.pos.y}).point.z();
+    };
+    EXPECT_DOUBLE_EQ(sheet_z(groundId), 0.0);
+    EXPECT_DOUBLE_EQ(sheet_z(upperId), 3.0);
+
+    // No sheet within the +/- 0.25 m tolerance of the hint.
+    EXPECT_THROW(simulation.AddAgent(agent_at({9, 3}), 1.5), SimulationError);
+    // Off the walkable area entirely.
+    EXPECT_THROW(simulation.AddAgent(agent_at({-50, -50})), SimulationError);
+}
+
+TEST(Simulation, GroundExitDoesNotSwallowAgentOnTheFloorAbove)
+{
+    auto geometry = std::make_unique<Geometry3D>();
+    geometry->initialize_from_mesh(two_storey_mesh());
+    auto routingEngine = std::make_unique<SurfaceMeshShortestPathRoutingEngine>(*geometry);
+    Simulation simulation(
+        std::make_unique<CollisionFreeSpeedModel>(CollisionFreeSpeedModel{8.0, 0.1, 5.0, 0.02}),
+        std::move(geometry),
+        std::move(routingEngine),
+        0.01,
+        false);
+
+    // Exit on the ground floor, directly under the upper floor.
+    const auto exitId = simulation.AddStage(
+        ExitDescription{Polygon{std::vector<Point>{{7, 0}, {9, 0}, {9, 2}, {7, 2}}}});
+    const auto journeyId = simulation.AddJourney({{exitId, NonTransitionDescription{}}});
+    const auto agent_at = [journeyId, exitId](Point pos) {
+        return GenericAgent(
+            GenericAgent::ID::Invalid, journeyId, exitId, pos, CollisionFreeSpeedModelData{});
+    };
+
+    // The first agent starts on the upper floor exactly above the exit: its
+    // (x,y) is inside the exit polygon from the first step, 3 m too high.
+    // Without the z-band around the exit's anchored height it would be
+    // removed on the spot; instead it must keep walking toward the ramp.
+    simulation.AddAgent(agent_at({8, 1}), 3.0);
+    for(int step = 0; step < 30; ++step) {
+        simulation.Iterate();
+        ASSERT_EQ(simulation.AgentCount(), 1u) << "step " << step;
+    }
+    EXPECT_DOUBLE_EQ(simulation.Agents().front().z, 3.0);
+
+    // A ground-floor agent placed inside the exit completes right away --
+    // the z-band keeps same-floor completion intact. (It is stacked under
+    // the live upper agent: no validation clash across sheets either.)
+    simulation.AddAgent(agent_at({8, 1}));
+    ASSERT_EQ(simulation.AgentCount(), 2u);
+    simulation.Iterate();
+    EXPECT_EQ(simulation.AgentCount(), 1u);
+    EXPECT_DOUBLE_EQ(simulation.Agents().front().z, 3.0);
 }

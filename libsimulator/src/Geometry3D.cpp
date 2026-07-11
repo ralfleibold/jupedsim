@@ -10,6 +10,7 @@
 
 #include <array>
 #include <cassert>
+#include <cmath>
 #include <iterator>
 #include <map>
 #include <utility>
@@ -139,8 +140,7 @@ Geometry3D::FaceLocation Geometry3D::face_below(const Point3D& p) const
     // sheet separation, so it never changes which sheet is hit.
     constexpr double onSurfaceTolerance = 1e-9;
     const SurfaceKernel::Ray_3 ray(
-        Point3D{p.x(), p.y(), p.z() + onSurfaceTolerance},
-        SurfaceKernel::Direction_3(0, 0, -1));
+        Point3D{p.x(), p.y(), p.z() + onSurfaceTolerance}, SurfaceKernel::Direction_3(0, 0, -1));
     const auto hit = aabb_tree().first_intersection(ray);
     if(!hit) {
         return {SurfaceMesh::null_face(), SurfaceKernel::Point_3{}};
@@ -209,6 +209,28 @@ Geometry3D::locate_in_region(std::size_t region_id, const Point2D& xy) const
         return {face, *point};
     }
     return {SurfaceMesh::null_face(), Point3D{}};
+}
+
+Geometry3D::FaceLocation
+Geometry3D::locate_near_z(const Point2D& xy, double z, double tolerance) const
+{
+    const SurfaceKernel::Line_3 vertical(
+        Point3D{xy.x(), xy.y(), 0}, SurfaceKernel::Direction_3(0, 0, 1));
+    std::vector<AABBTree::Intersection_and_primitive_id<SurfaceKernel::Line_3>::Type> hits{};
+    aabb_tree().all_intersections(vertical, std::back_inserter(hits));
+
+    FaceLocation best{SurfaceMesh::null_face(), Point3D{}};
+    auto bestDeviation = tolerance;
+    for(const auto& [where, face] : hits) {
+        const auto* point = std::get_if<Point3D>(&where);
+        // Assert against vertical faces.
+        assert(point && "FATAL: vertical face hit by the locate line");
+        if(const auto deviation = std::abs(point->z() - z); deviation <= bestDeviation) {
+            bestDeviation = deviation;
+            best = {face, *point};
+        }
+    }
+    return best;
 }
 
 std::vector<std::size_t> Geometry3D::region_ids() const

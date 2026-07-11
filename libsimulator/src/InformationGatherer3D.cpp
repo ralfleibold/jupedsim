@@ -46,9 +46,7 @@ void InformationGatherer3D::update(
     update(agents, std::move(positions));
 }
 
-void InformationGatherer3D::add(
-    const AgentContainer<GenericAgent>& agents,
-    const Point3D& position)
+void InformationGatherer3D::add(const AgentContainer<GenericAgent>& agents, const Point3D& position)
 {
     assert(agents.size() == _positions.size() + 1);
     _agents = &agents;

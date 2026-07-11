@@ -30,14 +30,15 @@ class BaseStage;
 
 /// Stage updates ask the world one question: "who and which walls are around
 /// this slot?" -- expressed as a QueryAt callable
-/// `(Point, double radius) -> InformationForUpdate`. This adapter answers it
-/// from the 2D structures; the surface adapter lives in StageSystem.
+/// `(Point, double radius, double z) -> InformationForUpdate`. @p z is the
+/// stage's anchored height; the surface adapter uses it to pick the sheet,
+/// this 2D adapter ignores it.
 /// The returned info's walls may point into storage reused by the next call.
 inline auto stage_query_2d(
     const NeighborhoodSearch<GenericAgent>& neighborhoodSearch,
     const CollisionGeometry& geometry)
 {
-    return [&neighborhoodSearch, &geometry](Point p, double radius) {
+    return [&neighborhoodSearch, &geometry](Point p, double radius, double) {
         InformationForUpdate info{};
         info.neighbors = neighborhoodSearch.GetNeighboringAgents(p, radius);
         const auto& walls = geometry.LineSegmentsInApproxDistanceTo(p);
@@ -127,6 +128,11 @@ public:
 protected:
     ID id;
     size_t targeting{0};
+    /// Anchored surface height of the stage's representative point (set by
+    /// Simulation::AddStage; 0 on the 2D path and on flat lifts). Reached
+    /// checks stay 2D but add a z-band around this height, so a stage never
+    /// triggers for agents on a floor above or below it.
+    double _z{0};
 
 public:
     virtual ~BaseStage() = default;
@@ -134,6 +140,8 @@ public:
     virtual Point Target(const GenericAgent& agent) = 0;
     virtual StageProxy Proxy(Simulation* simulation_) = 0;
     ID Id() const { return id; }
+    void set_z(double z) { _z = z; }
+    double z() const { return _z; }
     size_t CountTargeting() const { return targeting; }
     void IncreaseTargeting() { targeting = targeting + 1; }
     void DecreaseTargeting()
@@ -209,10 +217,8 @@ public:
 /// between them); Invalid if there is none. Shared slot-occupancy core of the
 /// waiting set and the queue.
 template <typename Pred>
-GenericAgent::ID closest_visible_candidate(
-    Point slot_pos,
-    const InformationForUpdate& info,
-    Pred&& isEligible)
+GenericAgent::ID
+closest_visible_candidate(Point slot_pos, const InformationForUpdate& info, Pred&& isEligible)
 {
     GenericAgent::ID occupant = GenericAgent::ID::Invalid;
     double min_distance = std::numeric_limits<double>::max();
@@ -221,8 +227,8 @@ GenericAgent::ID closest_visible_candidate(
             continue;
         }
         const auto slot_to_agent = LineSegment(slot_pos, agent.pos);
-        const auto blocked = std::any_of(
-            info.walls.begin(), info.walls.end(), [&slot_to_agent](const auto& wall) {
+        const auto blocked =
+            std::any_of(info.walls.begin(), info.walls.end(), [&slot_to_agent](const auto& wall) {
                 return intersects(slot_to_agent, wall);
             });
         if(blocked) {
@@ -251,7 +257,7 @@ void NotifiableWaitingSet::Update(QueryAt&& queryAt)
     for(size_t index = count_occupants; index < slots.size(); ++index) {
         const auto slot_pos = slots[index];
         const auto occupant = closest_visible_candidate(
-            slot_pos, queryAt(slot_pos, 2.), [this](const GenericAgent& agent) {
+            slot_pos, queryAt(slot_pos, 2., _z), [this](const GenericAgent& agent) {
                 return agent.stageId == id &&
                        std::find(std::begin(occupants), std::end(occupants), agent.id) ==
                            std::end(occupants);
@@ -296,7 +302,7 @@ void NotifiableQueue::Update(QueryAt&& queryAt)
     for(size_t index = count_occupants; index < slots.size(); ++index) {
         const auto slot_pos = slots[index];
         const auto occupant = closest_visible_candidate(
-            slot_pos, queryAt(slot_pos, 2.), [this](const GenericAgent& agent) {
+            slot_pos, queryAt(slot_pos, 2., _z), [this](const GenericAgent& agent) {
                 return agent.stageId == id && !Contains(occupants, agent.id) &&
                        !exitingThisUpdate.contains(agent.id);
             });

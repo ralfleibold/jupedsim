@@ -94,8 +94,7 @@ public:
     {
         std::vector<LineSegment> wallBuffer{};
         _model->CheckModelConstraint(
-            agent,
-            gatherer.gather_at(anchor, _model->ConstraintRequirements(agent), wallBuffer));
+            agent, gatherer.gather_at(anchor, _model->ConstraintRequirements(agent), wallBuffer));
     }
 
 private:

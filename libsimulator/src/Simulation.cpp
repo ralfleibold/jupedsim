@@ -23,6 +23,7 @@
 #include <iterator>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -47,12 +48,21 @@ Simulation::Simulation(
         throw SimulationError("Simulation requires a routing engine.");
     }
     _geometry = _geometry3d->collision_geometry();
-    if(!_geometry) {
-        throw SimulationError(
-            "The geometry has no projected 2D view (it was not built from a polygon); "
-            "the simulation still requires one for collision handling.");
-    }
-    if(!runIn2d) {
+    if(runIn2d) {
+        if(!_geometry) {
+            throw SimulationError(
+                "The geometry has no projected 2D view (it was not built from a polygon); "
+                "the 2D operational path requires one for collision handling.");
+        }
+        // Unreachable via polygon input today (one polygon-with-holes lifts to
+        // one connected region), but the 2D path must never see more while
+        // both modes exist.
+        if(const auto regions = _geometry3d->region_count(); regions != 1) {
+            throw SimulationError(
+                "The 2D operational path requires a single-region geometry, found {} regions.",
+                regions);
+        }
+    } else {
         // Cell size matches _neighborhoodSearch{2.2} for gather parity; the
         // vertical interaction band is a placeholder until it becomes
         // configurable (flat lifts never exercise it).
@@ -203,70 +213,88 @@ Journey::ID Simulation::AddJourney(const std::map<BaseStage::ID, TransitionDescr
     return id;
 }
 
-BaseStage::ID Simulation::AddStage(const StageDescription stageDescription)
+BaseStage::ID Simulation::AddStage(const StageDescription stageDescription, double zHint)
 {
     JPS_SCOPED_TIMER_AND_TRACE(_timer, "Add Stage", Detailed);
-    // Stages carry no region yet, so surface mode anchors in region 0 -- the
-    // same interim choice StageSystem::RunOnSurface makes for slot queries
-    // (per-region stage anchoring is a C8 decision).
-    const auto inside = [this](Point p) {
+    // Anchored surface height at p, or nullopt if p is not walkable there.
+    // Surface mode picks the sheet nearest the z-hint (stages carry no
+    // region; per-level polygon semantics is a team follow-up); the 2D path
+    // is flat, z = 0.
+    const auto anchor_z = [this, zHint](Point p) -> std::optional<double> {
         if(_gatherer3d) {
-            return _geometry3d->locate_in_region(0, {p.x, p.y}).face != SurfaceMesh::null_face();
+            const auto anchor = _geometry3d->locate_near_z({p.x, p.y}, zHint, ZHintTolerance);
+            if(anchor.face == SurfaceMesh::null_face()) {
+                return std::nullopt;
+            }
+            return anchor.point.z();
         }
-        return _geometry->InsideGeometry(p);
+        return _geometry->InsideGeometry(p) ? std::optional<double>{0.0} : std::nullopt;
     };
-    std::visit(
+    // The stage's own height is that of its representative point (waypoint
+    // position, exit centroid, first slot) -- what reached checks band
+    // against and slot queries anchor near.
+    const auto stageZ = std::visit(
         overloaded{
-            [&inside](const WaypointDescription& d) -> void {
-                if(!inside(d.position)) {
-                    throw SimulationError("WayPoint {} not inside walkable area", d.position);
+            [&anchor_z](const WaypointDescription& d) -> double {
+                if(const auto z = anchor_z(d.position)) {
+                    return *z;
                 }
+                throw SimulationError("WayPoint {} not inside walkable area", d.position);
             },
-            [&inside](const ExitDescription& d) -> void {
-                if(!inside(d.polygon.Centroid())) {
-                    throw SimulationError("Exit {} not inside walkable area", d.polygon.Centroid());
+            [&anchor_z](const ExitDescription& d) -> double {
+                if(const auto z = anchor_z(d.polygon.Centroid())) {
+                    return *z;
                 }
+                throw SimulationError("Exit {} not inside walkable area", d.polygon.Centroid());
             },
-            [&inside](const NotifiableWaitingSetDescription& d) -> void {
-                for(const auto& point : d.slots) {
-                    if(!inside(point)) {
+            [&anchor_z](const NotifiableWaitingSetDescription& d) -> double {
+                double stageZ = 0;
+                for(std::size_t i = 0; i < d.slots.size(); ++i) {
+                    const auto z = anchor_z(d.slots[i]);
+                    if(!z) {
                         throw SimulationError(
-                            "NotifiableWaitingSet point {} not inside walkable area", point);
+                            "NotifiableWaitingSet point {} not inside walkable area", d.slots[i]);
+                    }
+                    if(i == 0) {
+                        stageZ = *z;
                     }
                 }
+                return stageZ;
             },
-            [&inside](const NotifiableQueueDescription& d) -> void {
-                for(const auto& point : d.slots) {
-                    if(!inside(point)) {
+            [&anchor_z](const NotifiableQueueDescription& d) -> double {
+                double stageZ = 0;
+                for(std::size_t i = 0; i < d.slots.size(); ++i) {
+                    const auto z = anchor_z(d.slots[i]);
+                    if(!z) {
                         throw SimulationError(
-                            "NotifiableQueue point {} not inside walkable area", point);
+                            "NotifiableQueue point {} not inside walkable area", d.slots[i]);
+                    }
+                    if(i == 0) {
+                        stageZ = *z;
                     }
                 }
+                return stageZ;
             },
-            [](const DirectSteeringDescription&) -> void {
-
-            }},
+            [](const DirectSteeringDescription&) -> double { return 0; }},
         stageDescription);
 
-    return _stageManager.AddStage(stageDescription, _removedAgentsInLastIteration);
+    const auto id = _stageManager.AddStage(stageDescription, _removedAgentsInLastIteration);
+    _stageManager.Stage(id)->set_z(stageZ);
+    return id;
 }
 
-GenericAgent::ID Simulation::AddAgent(GenericAgent agent)
+GenericAgent::ID Simulation::AddAgent(GenericAgent agent, double zHint)
 {
     JPS_SCOPED_TIMER_AND_TRACE(_timer, "Add Agent", Detailed);
     // The anchor of the new agent on the surface; only set in surface mode.
     Geometry3D::FaceLocation anchor{SurfaceMesh::null_face(), {}};
     if(_gatherer3d) {
-        auto num_regions = _geometry3d->region_count();
-        if(num_regions > 1) {
-            throw SimulationError(
-                "FIXME: Real 3D not yet supported, but found {} regions.", num_regions);
-        }
-        agent.regionId = 0;
-        anchor = _geometry3d->locate_in_region(agent.regionId, {agent.pos.x, agent.pos.y});
+        anchor = _geometry3d->locate_near_z({agent.pos.x, agent.pos.y}, zHint, ZHintTolerance);
         if(anchor.face == SurfaceMesh::null_face()) {
             throw SimulationError("Agent {} not inside walkable area", agent.pos);
         }
+        agent.regionId = _geometry3d->region_of(anchor.face);
+        agent.z = anchor.point.z();
     } else if(!_geometry->InsideGeometry(agent.pos)) {
         throw SimulationError("Agent {} not inside walkable area", agent.pos);
     }
@@ -462,6 +490,10 @@ StageProxy Simulation::Stage(BaseStage::ID stageId)
 }
 CollisionGeometry Simulation::Geo() const
 {
+    if(!_geometry) {
+        throw SimulationError(
+            "The geometry has no projected 2D view (it was not built from a polygon).");
+    }
     return *_geometry;
 }
 

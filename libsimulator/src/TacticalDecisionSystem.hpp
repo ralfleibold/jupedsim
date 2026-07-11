@@ -36,8 +36,8 @@ public:
                 }
                 z = anchor.point.z();
             }
-            agent.destination = routingEngine.GetNextWaypoint(
-                {agent.pos.x, agent.pos.y, z}, {dest.x, dest.y, 0.0});
+            agent.destination =
+                routingEngine.GetNextWaypoint({agent.pos.x, agent.pos.y, z}, {dest.x, dest.y, 0.0});
         }
     }
 };
