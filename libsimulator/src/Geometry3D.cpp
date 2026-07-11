@@ -132,8 +132,15 @@ const AABBTree& Geometry3D::aabb_tree() const
 Geometry3D::FaceLocation Geometry3D::face_below(const Point3D& p) const
 {
     // first_intersection along -z returns the hit nearest to the ray source,
-    // i.e. the face directly below the query point.
-    const SurfaceKernel::Ray_3 ray(p, SurfaceKernel::Direction_3(0, 0, -1));
+    // i.e. the face directly below the query point. The ray starts a hair
+    // above p: a query point sitting exactly on the surface (an agent's
+    // on-surface anchor) may round an ulp below its face's plane, and the
+    // strictly-downward ray would miss it. The nudge is far below any real
+    // sheet separation, so it never changes which sheet is hit.
+    constexpr double onSurfaceTolerance = 1e-9;
+    const SurfaceKernel::Ray_3 ray(
+        Point3D{p.x(), p.y(), p.z() + onSurfaceTolerance},
+        SurfaceKernel::Direction_3(0, 0, -1));
     const auto hit = aabb_tree().first_intersection(ray);
     if(!hit) {
         return {SurfaceMesh::null_face(), SurfaceKernel::Point_3{}};

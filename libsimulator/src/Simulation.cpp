@@ -100,7 +100,8 @@ void Simulation::Iterate()
 
     {
         JPS_SCOPED_TIMER_AND_TRACE(_timer, "Tactical Decision System", General);
-        _tacticalDecisionSystem.Run(*_routingEngine, _agents);
+        _tacticalDecisionSystem.Run(
+            *_routingEngine, _agents, _gatherer3d ? _geometry3d.get() : nullptr);
     }
 
     {
@@ -270,7 +271,7 @@ GenericAgent::ID Simulation::AddAgent(GenericAgent agent)
 
     auto v = IteratorPair(std::prev(std::end(_agents)), std::end(_agents));
     _stategicalDecisionSystem.Run(_journeys, v, _stageManager);
-    _tacticalDecisionSystem.Run(*_routingEngine, v);
+    _tacticalDecisionSystem.Run(*_routingEngine, v, _gatherer3d ? _geometry3d.get() : nullptr);
     return _agents.back().id.getID();
 }
 

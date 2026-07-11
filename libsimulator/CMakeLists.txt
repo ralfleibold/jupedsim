@@ -133,6 +133,7 @@ if (BUILD_TESTS)
         test/TestSimulationClock.cpp
         test/TestStage.cpp
         test/TestSurfaceStep.cpp
+        test/TestTacticalDecisionSystem.cpp
         test/TestUniqueID.cpp
         test/TestWallIndex.cpp
     )

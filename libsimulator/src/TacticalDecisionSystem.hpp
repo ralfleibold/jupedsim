@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
 
+#include "Geometry3D.hpp"
 #include "RoutingEngine3D.hpp"
+#include "SimulationError.hpp"
 
 class TacticalDecisionSystem
 {
@@ -13,14 +15,29 @@ public:
     TacticalDecisionSystem(TacticalDecisionSystem&& other) = delete;
     TacticalDecisionSystem& operator=(TacticalDecisionSystem&& other) = delete;
 
-    void Run(RoutingEngine3D& routingEngine, auto&& agents) const
+    /// @p surface is the Geometry3D when the simulation runs on the surface
+    /// (source height comes from the agent's region anchor), nullptr on the
+    /// legacy 2D path (z=0, exact for flat lifts). Target z stays 0 until
+    /// stages carry a height (Road-to-full-3D, B7).
+    void Run(RoutingEngine3D& routingEngine, auto&& agents, const Geometry3D* surface) const
     {
-        // z=0 is transitional: agents carry no height yet; after the switch
-        // the on-surface anchor supplies it.
         for(auto& agent : agents) {
             const auto dest = agent.target;
+            double z = 0.0;
+            if(surface != nullptr) {
+                const auto anchor =
+                    surface->locate_in_region(agent.regionId, {agent.pos.x, agent.pos.y});
+                if(anchor.face == SurfaceMesh::null_face()) {
+                    throw SimulationError(
+                        "Agent {} at {} is not on the surface of region {}",
+                        agent.id,
+                        agent.pos,
+                        agent.regionId);
+                }
+                z = anchor.point.z();
+            }
             agent.destination = routingEngine.GetNextWaypoint(
-                {agent.pos.x, agent.pos.y, 0.0}, {dest.x, dest.y, 0.0});
+                {agent.pos.x, agent.pos.y, z}, {dest.x, dest.y, 0.0});
         }
     }
 };
