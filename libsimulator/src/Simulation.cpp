@@ -206,29 +206,38 @@ Journey::ID Simulation::AddJourney(const std::map<BaseStage::ID, TransitionDescr
 BaseStage::ID Simulation::AddStage(const StageDescription stageDescription)
 {
     JPS_SCOPED_TIMER_AND_TRACE(_timer, "Add Stage", Detailed);
+    // Stages carry no region yet, so surface mode anchors in region 0 -- the
+    // same interim choice StageSystem::RunOnSurface makes for slot queries
+    // (per-region stage anchoring is a C8 decision).
+    const auto inside = [this](Point p) {
+        if(_gatherer3d) {
+            return _geometry3d->locate_in_region(0, {p.x, p.y}).face != SurfaceMesh::null_face();
+        }
+        return _geometry->InsideGeometry(p);
+    };
     std::visit(
         overloaded{
-            [this](const WaypointDescription& d) -> void {
-                if(!this->_geometry->InsideGeometry(d.position)) {
+            [&inside](const WaypointDescription& d) -> void {
+                if(!inside(d.position)) {
                     throw SimulationError("WayPoint {} not inside walkable area", d.position);
                 }
             },
-            [this](const ExitDescription& d) -> void {
-                if(!this->_geometry->InsideGeometry(d.polygon.Centroid())) {
+            [&inside](const ExitDescription& d) -> void {
+                if(!inside(d.polygon.Centroid())) {
                     throw SimulationError("Exit {} not inside walkable area", d.polygon.Centroid());
                 }
             },
-            [this](const NotifiableWaitingSetDescription& d) -> void {
+            [&inside](const NotifiableWaitingSetDescription& d) -> void {
                 for(const auto& point : d.slots) {
-                    if(!this->_geometry->InsideGeometry(point)) {
+                    if(!inside(point)) {
                         throw SimulationError(
                             "NotifiableWaitingSet point {} not inside walkable area", point);
                     }
                 }
             },
-            [this](const NotifiableQueueDescription& d) -> void {
+            [&inside](const NotifiableQueueDescription& d) -> void {
                 for(const auto& point : d.slots) {
-                    if(!this->_geometry->InsideGeometry(point)) {
+                    if(!inside(point)) {
                         throw SimulationError(
                             "NotifiableQueue point {} not inside walkable area", point);
                     }

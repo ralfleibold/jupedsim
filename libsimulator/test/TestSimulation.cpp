@@ -135,6 +135,38 @@ TEST(Simulation, ValidatesNewAgentsInBothModes)
     }
 }
 
+TEST(Simulation, ValidatesNewStagesInBothModes)
+{
+    // AddStage rejects positions off the walkable area -- via InsideGeometry
+    // in 2D mode, via the region-0 surface locate in surface mode. Verdicts
+    // must match for every stage flavor.
+    for(const bool runIn2d : {true, false}) {
+        SCOPED_TRACE(runIn2d ? "2d" : "surface");
+        const auto simulation = l_corridor_simulation(false, runIn2d);
+
+        EXPECT_NO_THROW(simulation->AddStage(WaypointDescription{{5, 1}, 0.5}));
+        EXPECT_THROW(simulation->AddStage(WaypointDescription{{5, 5}, 0.5}), SimulationError);
+
+        EXPECT_NO_THROW(simulation->AddStage(
+            ExitDescription{Polygon{std::vector<Point>{{0, 0}, {2, 0}, {2, 2}, {0, 2}}}}));
+        // Centroid (5, 5) is in the corridor's notch.
+        EXPECT_THROW(
+            simulation->AddStage(
+                ExitDescription{Polygon{std::vector<Point>{{4, 4}, {6, 4}, {6, 6}, {4, 6}}}}),
+            SimulationError);
+
+        EXPECT_NO_THROW(
+            simulation->AddStage(NotifiableWaitingSetDescription{{{5, 1}, {6, 1}}}));
+        EXPECT_THROW(
+            simulation->AddStage(NotifiableWaitingSetDescription{{{5, 1}, {5, 5}}}),
+            SimulationError);
+
+        EXPECT_NO_THROW(simulation->AddStage(NotifiableQueueDescription{{{5, 1}, {6, 1}}}));
+        EXPECT_THROW(
+            simulation->AddStage(NotifiableQueueDescription{{{5, 1}, {5, 5}}}), SimulationError);
+    }
+}
+
 TEST(Simulation, PublicAgentQueriesMatchAcrossModes)
 {
     // AgentsInRange / AgentsInPolygon answer from the mode's own bookkeeping
