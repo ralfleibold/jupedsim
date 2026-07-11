@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
+from pathlib import Path
 from typing import Any, Iterable
 
 import shapely
@@ -83,12 +84,13 @@ class Simulation:
             | shapely.MultiPolygon
             | shapely.MultiPoint
             | list[tuple[float, float]]
+            | Path
         ),
         dt: float = 0.01,
         trajectory_writer: TrajectoryWriter | None = None,
         timer_log_level: int = 1,
         routing_engine: TAStarRouting | SurfaceGeodesicRouting | None = None,
-        run_in_2d: bool = True,
+        run_in_2d: bool | None = None,
         **kwargs: Any,
     ) -> None:
         """Creates a Simulation.
@@ -111,6 +113,8 @@ class Simulation:
 
                 * str with a valid Well Known Text. In this format the same WKT types as mentioned for the shapely types are supported: GEOMETRYCOLLETION, MULTIPOLYGON, POLYGON, MULTIPOINT. The same restrictions as mentioned for the shapely types apply.
 
+                * :class:`~pathlib.Path` to an OBJ file containing the walkable surface as a 3D triangle mesh (multi-level geometries welded along their seams). Mesh input has no projected 2D view, so it always runs on the surface path with :class:`~jupedsim.routing.SurfaceGeodesicRouting`.
+
             dt: Iteration step size in seconds. It is recommended to
                 leave this at its default value.
             trajectory_writer: Any object implementing the
@@ -118,20 +122,21 @@ class Simulation:
                 in a sqlite database. If you want other formats such as CSV you need to provide
                 your own custom implementation.
             routing_engine: Selects how agents' route waypoints are computed.
-                :class:`~jupedsim.routing.TAStarRouting` (the default): A* on
-                the triangulated walkable area plus funnel smoothing, keeping
-                0.2 m wall clearance at corners.
-                :class:`~jupedsim.routing.SurfaceGeodesicRouting`: exact
-                geodesics on the surface mesh (currently the flat lift of the
-                given geometry) -- the future 3D routing path; it keeps no
-                wall clearance, so trajectories differ near corners.
+                :class:`~jupedsim.routing.TAStarRouting` (the default for
+                polygon geometry): A* on the triangulated walkable area plus
+                funnel smoothing, keeping 0.2 m wall clearance at corners.
+                :class:`~jupedsim.routing.SurfaceGeodesicRouting` (the
+                default and only option for mesh geometry): exact geodesics
+                on the surface mesh -- the future 3D routing path; it keeps
+                no wall clearance, so trajectories differ near corners.
             run_in_2d: Experimental, transitional. Selects the operational
-                path: True (the default) runs the legacy 2D neighborhood and
-                wall handling; False runs it on the surface mesh (the flat
-                z=0 lift of the given geometry) -- the future 3D path. On
-                flat geometry both produce identical trajectories; this
-                switch exists to validate exactly that and will be removed
-                once the surface path becomes the default.
+                path: True runs the legacy 2D neighborhood and wall handling;
+                False runs it on the surface mesh -- the future 3D path. The
+                default (None) picks True for polygon geometry and False for
+                mesh geometry (which cannot run in 2D). On flat geometry both
+                produce identical trajectories; this switch exists to
+                validate exactly that and will be removed once the surface
+                path becomes the default.
 
         Keyword Arguments:
             excluded_areas: describes exclusions
@@ -188,18 +193,31 @@ class Simulation:
             py_jps_model = py_jps._PythonModel(model)
         else:
             raise Exception("Unknown model type supplied")
+        # Mesh input (a Path to an OBJ file) has no projected 2D view: it can
+        # only run on the surface path with the surface engine, so both
+        # defaults flip accordingly.
+        if isinstance(geometry, Path):
+            native_geometry = str(geometry)
+            mesh_input = True
+        else:
+            native_geometry = build_geometry(geometry)._obj
+            mesh_input = False
         if routing_engine is None:
-            routing_engine = TAStarRouting()
+            routing_engine = (
+                SurfaceGeodesicRouting() if mesh_input else TAStarRouting()
+            )
         if isinstance(routing_engine, TAStarRouting):
             routing_engine_name = "tastar"
         elif isinstance(routing_engine, SurfaceGeodesicRouting):
             routing_engine_name = "surface_geodesic"
         else:
             raise Exception("Unknown routing engine supplied")
+        if run_in_2d is None:
+            run_in_2d = not mesh_input
         self._writer = trajectory_writer
         self._obj = py_jps.Simulation(
             model=py_jps_model,
-            geometry=build_geometry(geometry)._obj,
+            geometry=native_geometry,
             dt=dt,
             routing_engine=routing_engine_name,
             run_in_2d=run_in_2d,

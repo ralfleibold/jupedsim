@@ -71,6 +71,43 @@ void init_simulation(py::module_& m)
             py::arg("routing_engine") = "tastar",
             py::arg("run_in_2d") = true)
         .def(
+            // Mesh input: geometry is a path to a mesh file (OBJ). Mesh-built
+            // geometries have no projected 2D view, so only the surface
+            // engine can route on them and only the surface operational path
+            // can run them.
+            py::init(
+                [](std::unique_ptr<OperationalModel> model,
+                   const std::string& geometry,
+                   double dT,
+                   const std::string& routing_engine,
+                   bool run_in_2d) {
+                    if(!model) {
+                        throw std::invalid_argument("model must not be None");
+                    }
+                    if(routing_engine != "surface_geodesic") {
+                        throw std::invalid_argument(
+                            "routing engine '" + routing_engine +
+                            "' needs a polygon geometry; mesh input routes with "
+                            "'surface_geodesic'");
+                    }
+                    auto geometry3d = std::make_unique<Geometry3D>();
+                    geometry3d->initialize_from_obj(geometry);
+                    auto routingEngine =
+                        std::make_unique<SurfaceMeshShortestPathRoutingEngine>(*geometry3d);
+                    return std::make_unique<Simulation>(
+                        std::move(model),
+                        std::move(geometry3d),
+                        std::move(routingEngine),
+                        dT,
+                        run_in_2d);
+                }),
+            py::kw_only(),
+            py::arg("model"),
+            py::arg("geometry"),
+            py::arg("dt"),
+            py::arg("routing_engine") = "surface_geodesic",
+            py::arg("run_in_2d") = false)
+        .def(
             "add_waypoint_stage",
             [](Simulation& sim, std::tuple<double, double> position, double distance) {
                 return sim.AddStage(WaypointDescription{intoPoint(position), distance}).getID();
