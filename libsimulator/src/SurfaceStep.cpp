@@ -1,24 +1,33 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "SurfaceStep.hpp"
 
-#include <cassert>
+#include "SimulationError.hpp"
+
 #include <cstddef>
 #include <utility>
+#include <vector>
 
 void run_surface_step(
     double dT,
     const OperationalModel& model,
     InformationGatherer3D& gatherer,
     const Geometry3D& geometry,
-    AgentContainer<GenericAgent>& agents,
-    std::vector<Geometry3D::FaceLocation>& anchors)
+    AgentContainer<GenericAgent>& agents)
 {
-    assert(agents.size() == anchors.size());
     const auto agentCount = agents.size();
 
     std::vector<Point3D> positions{};
     positions.reserve(agentCount);
-    for(const auto& anchor : anchors) {
+    for(const auto& agent : agents) {
+        const auto anchor =
+            geometry.locate_in_region(agent.regionId, {agent.pos.x, agent.pos.y});
+        if(anchor.face == SurfaceMesh::null_face()) {
+            throw SimulationError(
+                "Agent {} at {} is not on the surface of region {}",
+                agent.id,
+                agent.pos,
+                agent.regionId);
+        }
         positions.push_back(anchor.point);
     }
     gatherer.update(agents, std::move(positions));
@@ -35,11 +44,11 @@ void run_surface_step(
 
     // Apply, then re-anchor the walked 2D step onto the surface.
     for(std::size_t i = 0; i < agentCount; ++i) {
-        const auto from = agents[i].pos;
-        model.ApplyUpdate(updates[i], agents[i]);
-        anchors[i] = geometry.walk_on_surface(
-            geometry.region_of(anchors[i].face),
-            {from.x, from.y},
-            {agents[i].pos.x, agents[i].pos.y});
+        auto& agent = agents[i];
+        const auto from = agent.pos;
+        model.ApplyUpdate(updates[i], agent);
+        const auto anchor = geometry.walk_on_surface(
+            agent.regionId, {from.x, from.y}, {agent.pos.x, agent.pos.y});
+        agent.regionId = geometry.region_of(anchor.face);
     }
 }

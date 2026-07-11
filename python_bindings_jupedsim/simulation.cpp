@@ -39,7 +39,8 @@ void init_simulation(py::module_& m)
                 [](std::unique_ptr<OperationalModel> model,
                    CollisionGeometry geometry,
                    double dT,
-                   const std::string& routing_engine) {
+                   const std::string& routing_engine,
+                   bool run_in_2d) {
                     if(!model) {
                         throw std::invalid_argument("model must not be None");
                     }
@@ -60,13 +61,15 @@ void init_simulation(py::module_& m)
                         std::move(model),
                         std::move(geometry3d),
                         std::move(routingEngine),
-                        dT);
+                        dT,
+                        run_in_2d);
                 }),
             py::kw_only(),
             py::arg("model"),
             py::arg("geometry"),
             py::arg("dt"),
-            py::arg("routing_engine") = "tastar")
+            py::arg("routing_engine") = "tastar",
+            py::arg("run_in_2d") = true)
         .def(
             "add_waypoint_stage",
             [](Simulation& sim, std::tuple<double, double> position, double distance) {

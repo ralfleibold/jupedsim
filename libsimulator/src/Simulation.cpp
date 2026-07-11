@@ -33,7 +33,8 @@ Simulation::Simulation(
     std::unique_ptr<OperationalModel>&& operationalModel,
     std::unique_ptr<Geometry3D>&& geometry,
     std::unique_ptr<RoutingEngine3D>&& routingEngine,
-    double dT)
+    double dT,
+    bool runIn2d)
     : _clock(dT)
     , _operationalDecisionSystem(std::move(operationalModel))
     , _geometry3d(std::move(geometry))
@@ -50,6 +51,12 @@ Simulation::Simulation(
         throw SimulationError(
             "The geometry has no projected 2D view (it was not built from a polygon); "
             "the simulation still requires one for collision handling.");
+    }
+    if(!runIn2d) {
+        // Cell size matches _neighborhoodSearch{2.2} for gather parity; the
+        // vertical interaction band is a placeholder until it becomes
+        // configurable (flat lifts never exercise it).
+        _gatherer3d = std::make_unique<InformationGatherer3D>(*_geometry3d, 2.2, 2.2);
     }
 }
 
@@ -98,8 +105,13 @@ void Simulation::Iterate()
 
     {
         JPS_SCOPED_TIMER_AND_TRACE(_timer, "Operational Decision System", General);
-        _operationalDecisionSystem.Run(
-            _clock.dT(), _clock.ElapsedTime(), _neighborhoodSearch, *_geometry, _agents);
+        if(_gatherer3d) {
+            _operationalDecisionSystem.RunOnSurface(
+                _clock.dT(), *_gatherer3d, *_geometry3d, _agents);
+        } else {
+            _operationalDecisionSystem.Run(
+                _clock.dT(), _clock.ElapsedTime(), _neighborhoodSearch, *_geometry, _agents);
+        }
     }
     _clock.Advance();
 }

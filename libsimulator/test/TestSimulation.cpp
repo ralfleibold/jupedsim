@@ -23,7 +23,8 @@ namespace
 /// heads for an exit at the top of the vertical leg -- its route has to bend
 /// around that corner. @p surfaceRouting picks which engine is injected: the
 /// surface-mesh geodesic on the flat lift, or the legacy 2D engine.
-std::unique_ptr<Simulation> l_corridor_simulation(bool surfaceRouting)
+/// @p runIn2d selects the operational path (legacy 2D vs. surface step).
+std::unique_ptr<Simulation> l_corridor_simulation(bool surfaceRouting, bool runIn2d = true)
 {
     GeometryBuilder builder{};
     builder.AddAccessibleArea({{0, 0}, {10, 0}, {10, 10}, {8, 10}, {8, 2}, {0, 2}});
@@ -41,7 +42,8 @@ std::unique_ptr<Simulation> l_corridor_simulation(bool surfaceRouting)
         std::make_unique<CollisionFreeSpeedModel>(CollisionFreeSpeedModel{8.0, 0.1, 5.0, 0.02}),
         std::move(geometry),
         std::move(routingEngine),
-        0.01);
+        0.01,
+        runIn2d);
 
     const auto exitId = simulation->AddStage(
         ExitDescription{Polygon{std::vector<Point>{{8, 9}, {10, 9}, {10, 10}, {8, 10}}}});
@@ -77,6 +79,30 @@ TEST(Simulation, UsesTheInjectedRoutingEngine)
     const auto surface_destination = destination_after_one_iteration(*surface);
     EXPECT_NEAR(surface_destination.x, corner.x, 1e-6);
     EXPECT_NEAR(surface_destination.y, corner.y, 1e-6);
+}
+
+TEST(Simulation, SurfaceOperationalPathReproducesThe2DPath)
+{
+    // The parity gate for the switch: identical routing (legacy TA*), only
+    // the operational path differs -- gather/apply on the 2D structures vs.
+    // gather/apply/re-anchor on the flat surface lift. Trajectories must
+    // match exactly, wall contact at the corner included.
+    const auto in2d = l_corridor_simulation(false, true);
+    const auto onSurface = l_corridor_simulation(false, false);
+
+    for(int step = 0; step < 800; ++step) {
+        in2d->Iterate();
+        onSurface->Iterate();
+        ASSERT_EQ(in2d->AgentCount(), 1u);
+        ASSERT_EQ(onSurface->AgentCount(), 1u);
+        const auto& expected = in2d->Agents().front();
+        const auto& actual = onSurface->Agents().front();
+        ASSERT_NEAR(actual.pos.x, expected.pos.x, 1e-9) << "step " << step;
+        ASSERT_NEAR(actual.pos.y, expected.pos.y, 1e-9) << "step " << step;
+        ASSERT_EQ(actual.regionId, 0u);
+    }
+    // Sanity: the walk is well underway, past the corner region.
+    EXPECT_GT(in2d->Agents().front().pos.x, 5.0);
 }
 
 TEST(Simulation, RejectsGeometryWithoutThe2DView)

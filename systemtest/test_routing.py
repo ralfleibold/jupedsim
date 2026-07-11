@@ -48,20 +48,14 @@ def test_routing_engine_without_excluded_areas():
     assert engine is not None
 
 
-@pytest.mark.parametrize(
-    "routing_engine",
-    [jps.TAStarRouting(), jps.SurfaceGeodesicRouting()],
-    ids=lambda engine: type(engine).__name__,
-)
-def test_simulation_evacuates_l_corridor_with_either_routing(routing_engine):
-    """Smoke test for the routing_engine parameter: the agent has to round the
-    inner corner (8, 2) and reach the exit with both engines. The
-    engine-selection behavior itself is asserted in the C++ test
-    Simulation.UsesTheInjectedRoutingEngine."""
+def make_l_corridor_simulation(routing_engine=None, run_in_2d=True):
+    """One agent at (1, 1) heading for an exit at the top of the vertical leg;
+    its route bends around the inner corner (8, 2)."""
     sim = jps.Simulation(
         model=jps.CollisionFreeSpeedModel(),
         geometry=[(0, 0), (10, 0), (10, 10), (8, 10), (8, 2), (0, 2)],
         routing_engine=routing_engine,
+        run_in_2d=run_in_2d,
     )
     exit_id = sim.add_exit_stage([(8, 9), (10, 9), (10, 10), (8, 10)])
     journey_id = sim.add_journey(jps.JourneyDescription([exit_id]))
@@ -70,9 +64,41 @@ def test_simulation_evacuates_l_corridor_with_either_routing(routing_engine):
             journey_id=journey_id, stage_id=exit_id, position=(1, 1)
         )
     )
+    return sim
+
+
+@pytest.mark.parametrize("run_in_2d", [True, False], ids=["2d", "surface"])
+@pytest.mark.parametrize(
+    "routing_engine",
+    [jps.TAStarRouting(), jps.SurfaceGeodesicRouting()],
+    ids=lambda engine: type(engine).__name__,
+)
+def test_simulation_evacuates_l_corridor_with_either_routing(
+    routing_engine, run_in_2d
+):
+    """Smoke test for the routing_engine and run_in_2d parameters: the agent
+    has to round the inner corner (8, 2) and reach the exit in every
+    combination. Engine selection and 2D/surface parity themselves are
+    asserted in the C++ tests Simulation.UsesTheInjectedRoutingEngine and
+    Simulation.SurfaceOperationalPathReproducesThe2DPath."""
+    sim = make_l_corridor_simulation(routing_engine, run_in_2d)
     while sim.agent_count() > 0:
         assert sim.iteration_count() < 10_000, "agent never reached the exit"
         sim.iterate()
+
+
+def test_run_in_2d_flag_reproduces_trajectories():
+    """The parity gate over the public API: identical routing, only the
+    operational path differs -- the trajectories must match exactly."""
+    sim_2d = make_l_corridor_simulation()
+    sim_surface = make_l_corridor_simulation(run_in_2d=False)
+    for _ in range(800):
+        sim_2d.iterate()
+        sim_surface.iterate()
+        for expected, actual in zip(sim_2d.agents(), sim_surface.agents()):
+            assert actual.position == pytest.approx(
+                expected.position, abs=1e-9
+            )
 
 
 BAD_ASTAR_ROUTINGS = [

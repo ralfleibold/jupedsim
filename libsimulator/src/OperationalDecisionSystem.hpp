@@ -7,6 +7,7 @@
 #include "NeighborhoodSearch.hpp"
 #include "OperationalModel.hpp"
 #include "OperationalModelType.hpp"
+#include "SurfaceStep.hpp"
 
 #include <cstddef>
 #include <memory>
@@ -59,6 +60,18 @@ public:
         for(std::size_t i = 0; i < agentCount; ++i) {
             _model->ApplyUpdate(updates[i], agents[i]);
         }
+    }
+
+    /// The 3D counterpart of Run: gather through the surface neighborhood
+    /// (InformationGatherer3D), compute with the unchanged models, apply and
+    /// re-anchor onto the surface. Transitional; replaces Run at the switch.
+    void RunOnSurface(
+        double dT,
+        InformationGatherer3D& gatherer,
+        const Geometry3D& geometry,
+        AgentContainer<GenericAgent>& agents) const
+    {
+        run_surface_step(dT, *_model, gatherer, geometry, agents);
     }
 
     void ValidateAgent(

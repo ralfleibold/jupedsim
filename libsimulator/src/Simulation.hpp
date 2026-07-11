@@ -5,6 +5,7 @@
 #include "CollisionGeometry.hpp"
 #include "GenericAgent.hpp"
 #include "Geometry3D.hpp"
+#include "InformationGatherer3D.hpp"
 #include "Journey.hpp"
 #include "NeighborhoodSearch.hpp"
 #include "OperationalDecisionSystem.hpp"
@@ -46,6 +47,10 @@ class Simulation
     /// view is required until the 3D surface step replaces it.
     const CollisionGeometry* _geometry{};
     std::unique_ptr<RoutingEngine3D> _routingEngine{};
+    /// Present iff the operational step runs on the surface (run_in_2d ==
+    /// false): gather + apply go through the 3D machinery, agents carry their
+    /// region anchor. Transitional A/B seam for the 2D/3D parity gate.
+    std::unique_ptr<InformationGatherer3D> _gatherer3d{};
     AgentContainer<GenericAgent> _agents;
     std::vector<GenericAgent::ID> _removedAgentsInLastIteration;
     std::unordered_map<Journey::ID, std::unique_ptr<Journey>> _journeys;
@@ -58,11 +63,16 @@ public:
     /// (it borrows, never owns). @p geometry must carry the projected 2D view
     /// (collision_geometry() != nullptr, i.e. built from a polygon) as long as
     /// the operational layer runs in 2D.
+    /// @p runIn2d selects the operational path: true (default) = the legacy
+    /// 2D gather/apply, false = gather + apply + re-anchor on the surface
+    /// mesh. On flat geometry both must produce identical trajectories --
+    /// this is the transitional parity switch, removed once 3D is the default.
     Simulation(
         std::unique_ptr<OperationalModel>&& operationalModel,
         std::unique_ptr<Geometry3D>&& geometry,
         std::unique_ptr<RoutingEngine3D>&& routingEngine,
-        double dT);
+        double dT,
+        bool runIn2d = true);
     Simulation(const Simulation& other) = delete;
     Simulation& operator=(const Simulation& other) = delete;
     Simulation(Simulation&& other) = delete;

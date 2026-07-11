@@ -15,6 +15,7 @@
 
 #include <fmt/core.h>
 
+#include <cstddef>
 #include <deque>
 #include <utility>
 #include <variant>
@@ -34,6 +35,11 @@ struct GenericAgent {
 
     // Agent fields common for all models
     Point pos{};
+
+    /// Region (sheet) of the Geometry3D surface the agent is anchored on.
+    /// Disambiguates stacked floors sharing the same (x,y). The 2D path and
+    /// single-region geometries (every flat polygon lift) always use 0.
+    std::size_t regionId{0};
 
     using Model = std::variant<
         GeneralizedCentrifugalForceModelData,

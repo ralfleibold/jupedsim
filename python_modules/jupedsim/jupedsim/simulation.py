@@ -88,6 +88,7 @@ class Simulation:
         trajectory_writer: TrajectoryWriter | None = None,
         timer_log_level: int = 1,
         routing_engine: TAStarRouting | SurfaceGeodesicRouting | None = None,
+        run_in_2d: bool = True,
         **kwargs: Any,
     ) -> None:
         """Creates a Simulation.
@@ -124,6 +125,13 @@ class Simulation:
                 geodesics on the surface mesh (currently the flat lift of the
                 given geometry) -- the future 3D routing path; it keeps no
                 wall clearance, so trajectories differ near corners.
+            run_in_2d: Experimental, transitional. Selects the operational
+                path: True (the default) runs the legacy 2D neighborhood and
+                wall handling; False runs it on the surface mesh (the flat
+                z=0 lift of the given geometry) -- the future 3D path. On
+                flat geometry both produce identical trajectories; this
+                switch exists to validate exactly that and will be removed
+                once the surface path becomes the default.
 
         Keyword Arguments:
             excluded_areas: describes exclusions
@@ -194,6 +202,7 @@ class Simulation:
             geometry=build_geometry(geometry)._obj,
             dt=dt,
             routing_engine=routing_engine_name,
+            run_in_2d=run_in_2d,
         )
         self._timer = Timer(self._obj, timer_log_level=timer_log_level)
 

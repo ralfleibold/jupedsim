@@ -112,18 +112,25 @@ GenericAgent make_agent(const Point& pos, const Point& destination)
     return agent;
 }
 
-/// On-surface anchor of the sheet at height @p z covering the agent position.
-Geometry3D::FaceLocation
-anchor_at_height(const Geometry3D& geo, const GenericAgent& agent, double z)
+/// Region id of the sheet at height @p z covering the agent position.
+std::size_t region_at_height(const Geometry3D& geo, const GenericAgent& agent, double z)
 {
     for(std::size_t region = 0; region < geo.region_count(); ++region) {
         const auto loc = geo.locate_in_region(region, {agent.pos.x, agent.pos.y});
         if(loc.face != SurfaceMesh::null_face() && std::abs(loc.point.z() - z) < 1e-9) {
-            return loc;
+            return region;
         }
     }
     ADD_FAILURE() << "no sheet at (" << agent.pos.x << ", " << agent.pos.y << ", z=" << z << ")";
-    return {SurfaceMesh::null_face(), Point3D{}};
+    return 0;
+}
+
+/// The agent's current on-surface height (z of its anchor).
+double height_of(const Geometry3D& geo, const GenericAgent& agent)
+{
+    const auto loc = geo.locate_in_region(agent.regionId, {agent.pos.x, agent.pos.y});
+    EXPECT_NE(loc.face, SurfaceMesh::null_face());
+    return loc.point.z();
 }
 } // namespace
 
@@ -136,12 +143,11 @@ TEST(SurfaceStep, RampWalkRaisesHeightAndKeepsRegion)
     const auto model = default_cfsm();
     AgentContainer<GenericAgent> agents{};
     agents.push_back(make_agent({10, 2}, {10, 8}));
-    std::vector<Geometry3D::FaceLocation> anchors{
-        anchor_at_height(geo, agents.front(), 0.4 * 2)};
+    agents.front().regionId = region_at_height(geo, agents.front(), 0.4 * 2);
 
     InformationGatherer3D gatherer{geo, 2.2, 2.2};
     for(int step = 0; step < 60; ++step) {
-        run_surface_step(dT, model, gatherer, geo, agents, anchors);
+        run_surface_step(dT, model, gatherer, geo, agents);
     }
 
     // v0=1.2 for 3 s moves the agent well up the ramp on a straight line.
@@ -149,10 +155,8 @@ TEST(SurfaceStep, RampWalkRaisesHeightAndKeepsRegion)
     EXPECT_GT(agent.pos.y, 4.0);
     EXPECT_NEAR(agent.pos.x, 10.0, 1e-6);
     // The anchor tracks the agent, on the ramp plane z = 0.4*y, region 0.
-    EXPECT_NEAR(anchors.front().point.x(), agent.pos.x, 1e-9);
-    EXPECT_NEAR(anchors.front().point.y(), agent.pos.y, 1e-9);
-    EXPECT_NEAR(anchors.front().point.z(), 0.4 * agent.pos.y, 1e-9);
-    EXPECT_EQ(geo.region_of(anchors.front().face), 0u);
+    EXPECT_NEAR(height_of(geo, agent), 0.4 * agent.pos.y, 1e-9);
+    EXPECT_EQ(agent.regionId, 0u);
 }
 
 TEST(SurfaceStep, AgentWalksStraightBelowAnUpperFloor)
@@ -169,18 +173,18 @@ TEST(SurfaceStep, AgentWalksStraightBelowAnUpperFloor)
     AgentContainer<GenericAgent> agents{};
     agents.push_back(make_agent({3, 5}, {8, 5}));
     agents.push_back(make_agent({5, 5}, {5, 5}));
-    std::vector<Geometry3D::FaceLocation> anchors{
-        anchor_at_height(geo, agents[0], 0), anchor_at_height(geo, agents[1], 3.0)};
+    agents[0].regionId = region_at_height(geo, agents[0], 0);
+    agents[1].regionId = region_at_height(geo, agents[1], 3.0);
 
     InformationGatherer3D gatherer{geo, 2.2, 2.2};
     for(int step = 0; step < 60; ++step) {
-        run_surface_step(dT, model, gatherer, geo, agents, anchors);
+        run_surface_step(dT, model, gatherer, geo, agents);
     }
 
     EXPECT_GT(agents[0].pos.x, 6.5);
     EXPECT_NEAR(agents[0].pos.y, 5.0, 1e-6);
-    EXPECT_NEAR(anchors[0].point.z(), 0.0, 1e-9);
-    EXPECT_NEAR(anchors[1].point.z(), 3.0, 1e-9);
+    EXPECT_NEAR(height_of(geo, agents[0]), 0.0, 1e-9);
+    EXPECT_NEAR(height_of(geo, agents[1]), 3.0, 1e-9);
 }
 
 TEST(SurfaceStep, FlatGeometryReproduces2DPipeline)
@@ -215,12 +219,12 @@ TEST(SurfaceStep, FlatGeometryReproduces2DPipeline)
     AgentContainer<GenericAgent> agents3d{};
     agents3d.push_back(make_agent(start_a, goal));
     agents3d.push_back(make_agent(start_b, goal));
-    std::vector<Geometry3D::FaceLocation> anchors{
-        anchor_at_height(geo, agents3d[0], 0), anchor_at_height(geo, agents3d[1], 0)};
+    agents3d[0].regionId = region_at_height(geo, agents3d[0], 0);
+    agents3d[1].regionId = region_at_height(geo, agents3d[1], 0);
 
     InformationGatherer3D gatherer{geo, 2.2, 2.2};
     for(int step = 0; step < steps; ++step) {
-        run_surface_step(dT, model, gatherer, geo, agents3d, anchors);
+        run_surface_step(dT, model, gatherer, geo, agents3d);
     }
 
     for(std::size_t i = 0; i < agents2d.size(); ++i) {
@@ -264,12 +268,12 @@ TEST(SurfaceStep, LiftedHoleGeometryReproduces2DPipelineWithWallContact)
     AgentContainer<GenericAgent> agents3d{};
     agents3d.push_back(make_agent({2, 5}, goal_a));
     agents3d.push_back(make_agent({2, 3.5}, goal_b));
-    std::vector<Geometry3D::FaceLocation> anchors{
-        anchor_at_height(geo, agents3d[0], 0), anchor_at_height(geo, agents3d[1], 0)};
+    agents3d[0].regionId = region_at_height(geo, agents3d[0], 0);
+    agents3d[1].regionId = region_at_height(geo, agents3d[1], 0);
 
     InformationGatherer3D gatherer{geo, 2.2, 2.2};
     for(int step = 0; step < steps; ++step) {
-        run_surface_step(dT, model, gatherer, geo, agents3d, anchors);
+        run_surface_step(dT, model, gatherer, geo, agents3d);
     }
 
     for(std::size_t i = 0; i < agents2d.size(); ++i) {
@@ -308,14 +312,14 @@ TEST(SurfaceStep, SeamCrossingFlipsRegionWithoutDisturbingTheWalk)
     const auto model = default_cfsm();
     AgentContainer<GenericAgent> agents{};
     agents.push_back(make_agent(start, destination));
-    std::vector<Geometry3D::FaceLocation> anchors{anchor_at_height(geo, agents.front(), z)};
+    agents.front().regionId = region_at_height(geo, agents.front(), z);
 
     InformationGatherer3D gatherer{geo, 2.2, 2.2};
-    auto region = geo.region_of(anchors.front().face);
+    auto region = agents.front().regionId;
     const auto start_region = region;
     int region_flips = 0;
     for(int step = 0; step < 260; ++step) {
-        run_surface_step(dT, model, gatherer, geo, agents, anchors);
+        run_surface_step(dT, model, gatherer, geo, agents);
         // The seam is no wall and no crease: the walk stays a straight line on
         // a constant height; only the region label may change.
         if(seam_on_upper) {
@@ -323,8 +327,8 @@ TEST(SurfaceStep, SeamCrossingFlipsRegionWithoutDisturbingTheWalk)
         } else {
             ASSERT_NEAR(agents.front().pos.y, start.y, 1e-6) << "step " << step;
         }
-        ASSERT_NEAR(anchors.front().point.z(), z, 1e-9) << "step " << step;
-        if(const auto current = geo.region_of(anchors.front().face); current != region) {
+        ASSERT_NEAR(height_of(geo, agents.front()), z, 1e-9) << "step " << step;
+        if(const auto current = agents.front().regionId; current != region) {
             ++region_flips;
             region = current;
         }
