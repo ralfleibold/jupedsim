@@ -237,6 +237,14 @@ GenericAgent::ID Simulation::AddAgent(GenericAgent agent)
     if(!_geometry->InsideGeometry(agent.pos)) {
         throw SimulationError("Agent {} not inside walkable area", agent.pos);
     }
+    if(_gatherer3d) {
+        auto num_regions = _geometry3d->region_count();
+        if(num_regions > 1) {
+            throw SimulationError(
+                "FIXME: Real 3D not yet supported, but found {} regions.", num_regions);
+        }
+        agent.regionId = 0;
+    }
     if(_journeys.count(agent.journeyId) == 0) {
         throw SimulationError("Unknown journey id: {}", agent.journeyId);
     }

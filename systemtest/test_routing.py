@@ -87,6 +87,54 @@ def test_simulation_evacuates_l_corridor_with_either_routing(
         sim.iterate()
 
 
+@pytest.mark.parametrize("agent_count", [1, 5], ids=["1_agent", "5_agents"])
+def test_run_in_2d_flag_reproduces_trajectories_on_buw(agent_count):
+    """2D/surface parity on a real floorplan (BUW: ~50x32 m, 40 obstacles).
+    The route from the room pocket around (20, 24) to the exit at (42.5, 10)
+    is 1.9x the direct distance with 14 bends; with 5 clustered agents the
+    neighbor interaction is exercised on top. Identical TA* routing isolates
+    the operational (gather/apply) axis. Runs until everyone reached the
+    exit; positions must match at every step."""
+    geometry = load_wkt_file("examples/geometry/BUW.wkt")
+    starts = [
+        (20.21, 23.91),
+        (19.2, 23.9),
+        (20.2, 22.9),
+        (19.2, 22.9),
+        (21.2, 23.4),
+    ][:agent_count]
+
+    def build(run_in_2d):
+        sim = jps.Simulation(
+            model=jps.CollisionFreeSpeedModel(),
+            geometry=geometry,
+            run_in_2d=run_in_2d,
+        )
+        exit_id = sim.add_exit_stage(
+            [(41.5, 9.4), (43.5, 9.4), (43.5, 10.6), (41.5, 10.6)]
+        )
+        journey_id = sim.add_journey(jps.JourneyDescription([exit_id]))
+        for start in starts:
+            sim.add_agent(
+                jps.CollisionFreeSpeedModelAgentParameters(
+                    journey_id=journey_id, stage_id=exit_id, position=start
+                )
+            )
+        return sim
+
+    sim_2d = build(run_in_2d=True)
+    sim_surface = build(run_in_2d=False)
+    while sim_2d.agent_count() > 0:
+        assert sim_2d.iteration_count() < 6_000, "agents never reached the exit"
+        sim_2d.iterate()
+        sim_surface.iterate()
+        assert sim_surface.agent_count() == sim_2d.agent_count()
+        for expected, actual in zip(sim_2d.agents(), sim_surface.agents()):
+            assert actual.position == pytest.approx(
+                expected.position, abs=1e-9
+            )
+
+
 def test_run_in_2d_flag_reproduces_trajectories():
     """The parity gate over the public API: identical routing, only the
     operational path differs -- the trajectories must match exactly."""
