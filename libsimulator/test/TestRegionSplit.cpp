@@ -98,6 +98,27 @@ double mean_z(const SurfaceMesh& mesh, SurfaceMesh::Face_index f)
 }
 } // namespace
 
+TEST(RegionSplit, FlatSliverNeighborsStayOneRegion)
+{
+    // Regression: three flat triangles from the BUW floorplan lift, two of
+    // them slim slivers that touch each other in exactly ONE point
+    // ((11.48, 20.42)). With inexact constructions CGAL::intersection
+    // classified that vertex touch as a full triangle-shaped overlap, which
+    // fragmented the flat (single-valued!) BUW lift into 218 regions.
+    SurfaceMesh mesh{};
+    const auto a = mesh.add_vertex({11.56, 18.62, 0});
+    const auto b = mesh.add_vertex({11.48, 20.42, 0});
+    const auto c = mesh.add_vertex({11.48, 18.62, 0});
+    const auto d = mesh.add_vertex({11.56, 20.42, 0});
+    const auto e = mesh.add_vertex({8.48, 8.44, 0});
+    mesh.add_face(a, b, c);
+    mesh.add_face(a, d, b);
+    mesh.add_face(b, e, c);
+    ASSERT_EQ(mesh.number_of_faces(), 3u);
+    const auto [region, count] = split_into_regions(mesh);
+    EXPECT_EQ(count, 1u);
+}
+
 TEST(RegionSplit, FlatSquareIsSingleRegion)
 {
     auto mesh = flat_square();

@@ -2,6 +2,7 @@
 #include "RegionSplit.hpp"
 
 #include <CGAL/Bbox_2.h>
+#include <CGAL/Exact_predicates_exact_constructions_kernel.h>
 #include <CGAL/intersections.h>
 
 #include <array>
@@ -14,6 +15,12 @@ namespace
 {
 using P2 = SurfaceKernel::Point_2;
 using T2 = SurfaceKernel::Triangle_2;
+// The overlap classification must be exact: with inexact constructions,
+// CGAL::intersection has classified a mere vertex touch between two flat
+// slivers as a triangle-shaped overlap (BUW floorplan), fragmenting a
+// single-valued surface into hundreds of regions.
+using EK = CGAL::Exact_predicates_exact_constructions_kernel;
+using ET2 = EK::Triangle_2;
 
 /// Orthogonal projection of a triangular face onto the x/y-plane (z dropped).
 T2 project(const SurfaceMesh& mesh, SurfaceMesh::Face_index f)
@@ -27,19 +34,27 @@ T2 project(const SurfaceMesh& mesh, SurfaceMesh::Face_index f)
     return T2(p[0], p[1], p[2]);
 }
 
+ET2 exact(const T2& t)
+{
+    return ET2(
+        EK::Point_2(t[0].x(), t[0].y()),
+        EK::Point_2(t[1].x(), t[1].y()),
+        EK::Point_2(t[2].x(), t[2].y()));
+}
+
 /// True iff the two projected triangles share a positive-area region. Faces of
 /// one single-valued region only ever touch along shared edges/vertices, whose
 /// intersection is a segment/point -- those are deliberately NOT overlaps.
 bool overlaps(const T2& a, const T2& b)
 {
-    const auto result = CGAL::intersection(a, b);
+    const auto result = CGAL::intersection(exact(a), exact(b));
     if(!result) {
         return false;
     }
-    if(std::get_if<T2>(&*result)) {
+    if(std::get_if<ET2>(&*result)) {
         return true; // triangle-shaped overlap
     }
-    if(const auto* poly = std::get_if<std::vector<P2>>(&*result)) {
+    if(const auto* poly = std::get_if<std::vector<EK::Point_2>>(&*result)) {
         return poly->size() >= 3; // convex polygon overlap
     }
     return false; // Point_2 / Segment_2: boundary touch only
