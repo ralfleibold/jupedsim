@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "SurfaceStep.hpp"
 
-#include "SimulationError.hpp"
-
 #include <cstddef>
 #include <utility>
 #include <vector>
@@ -16,23 +14,9 @@ void run_surface_step(
 {
     const auto agentCount = agents.size();
 
-    std::vector<Point3D> positions{};
-    positions.reserve(agentCount);
-    for(const auto& agent : agents) {
-        const auto anchor = geometry.locate_in_region(agent.regionId, {agent.pos.x, agent.pos.y});
-        if(anchor.face == SurfaceMesh::null_face()) {
-            throw SimulationError(
-                "Agent {} at {} is not on the surface of region {}",
-                agent.id,
-                agent.pos,
-                agent.regionId);
-        }
-        positions.push_back(anchor.point);
-    }
-    gatherer.update(agents, std::move(positions));
-
-    // Compute all updates from the frozen pre-step state. The wall buffer is
-    // reused across agents: info is consumed within the model call.
+    // Compute all updates from the frozen pre-step state (the caller updated
+    // the gatherer for this iteration). The wall buffer is reused across
+    // agents: info is consumed within the model call.
     std::vector<OperationalModelUpdate> updates{};
     updates.reserve(agentCount);
     std::vector<LineSegment> wallBuffer{};
@@ -41,7 +25,11 @@ void run_surface_step(
         updates.push_back(model.ComputeNewPosition(dT, agents[i], info));
     }
 
-    // Apply, then re-anchor the walked 2D step onto the surface.
+    // Apply, re-anchor the walked 2D step onto the surface, and re-index so
+    // queries between steps (public API, agent validation) see the post-step
+    // anchors.
+    std::vector<Point3D> anchors{};
+    anchors.reserve(agentCount);
     for(std::size_t i = 0; i < agentCount; ++i) {
         auto& agent = agents[i];
         const auto from = agent.pos;
@@ -49,5 +37,7 @@ void run_surface_step(
         const auto anchor =
             geometry.walk_on_surface(agent.regionId, {from.x, from.y}, {agent.pos.x, agent.pos.y});
         agent.regionId = geometry.region_of(anchor.face);
+        anchors.push_back(anchor.point);
     }
+    gatherer.update(agents, std::move(anchors));
 }

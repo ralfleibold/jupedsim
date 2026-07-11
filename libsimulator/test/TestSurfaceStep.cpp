@@ -146,6 +146,7 @@ TEST(SurfaceStep, RampWalkRaisesHeightAndKeepsRegion)
 
     InformationGatherer3D gatherer{geo, 2.2, 2.2};
     for(int step = 0; step < 60; ++step) {
+        gatherer.update(geo, agents);
         run_surface_step(dT, model, gatherer, geo, agents);
     }
 
@@ -177,6 +178,7 @@ TEST(SurfaceStep, AgentWalksStraightBelowAnUpperFloor)
 
     InformationGatherer3D gatherer{geo, 2.2, 2.2};
     for(int step = 0; step < 60; ++step) {
+        gatherer.update(geo, agents);
         run_surface_step(dT, model, gatherer, geo, agents);
     }
 
@@ -223,6 +225,7 @@ TEST(SurfaceStep, FlatGeometryReproduces2DPipeline)
 
     InformationGatherer3D gatherer{geo, 2.2, 2.2};
     for(int step = 0; step < steps; ++step) {
+        gatherer.update(geo, agents3d);
         run_surface_step(dT, model, gatherer, geo, agents3d);
     }
 
@@ -272,6 +275,7 @@ TEST(SurfaceStep, LiftedHoleGeometryReproduces2DPipelineWithWallContact)
 
     InformationGatherer3D gatherer{geo, 2.2, 2.2};
     for(int step = 0; step < steps; ++step) {
+        gatherer.update(geo, agents3d);
         run_surface_step(dT, model, gatherer, geo, agents3d);
     }
 
@@ -318,6 +322,7 @@ TEST(SurfaceStep, SeamCrossingFlipsRegionWithoutDisturbingTheWalk)
     const auto start_region = region;
     int region_flips = 0;
     for(int step = 0; step < 260; ++step) {
+        gatherer.update(geo, agents);
         run_surface_step(dT, model, gatherer, geo, agents);
         // The seam is no wall and no crease: the walk stays a straight line on
         // a constant height; only the region label may change.

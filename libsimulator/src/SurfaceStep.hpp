@@ -11,6 +11,11 @@
 /// apply -> re-anchor each agent's 2D position onto the surface via
 /// walk_on_surface (new z, possibly flipped region).
 ///
+/// Requires @p gatherer to be updated for this iteration (the caller anchors
+/// the agents via gatherer.update(geometry, agents) after agent removal --
+/// the surface counterpart of NeighborhoodSearch::Update). On return the
+/// gatherer is re-indexed on the post-step anchors.
+///
 /// Each agent's on-surface anchor is (agent.pos, agent.regionId); the region
 /// id selects the sheet where floors stack in (x,y). walk_on_surface updates
 /// it as agents cross region seams.

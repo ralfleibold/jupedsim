@@ -38,6 +38,11 @@ public:
     /// outlive the gather calls of this step.
     void update(const AgentContainer<GenericAgent>& agents, std::vector<Point3D> positions);
 
+    /// Re-anchor all agents on @p geometry (via their regionId) and re-index.
+    /// The start-of-iteration refresh: agent removal invalidates the index of
+    /// the previous step. Throws if an agent is not on its region's surface.
+    void update(const Geometry3D& geometry, const AgentContainer<GenericAgent>& agents);
+
     /// Index the agent just appended to @p agents (on-surface anchor
     /// @p position), so queries between steps see agents added since the last
     /// update() -- the validation path adds agents outside the step.

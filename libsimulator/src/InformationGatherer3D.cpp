@@ -2,6 +2,7 @@
 #include "InformationGatherer3D.hpp"
 
 #include "Geometry3D.hpp"
+#include "SimulationError.hpp"
 
 #include <cassert>
 #include <span>
@@ -23,6 +24,26 @@ void InformationGatherer3D::update(
     _agents = &agents;
     _positions = std::move(positions);
     _search.rebuild_index(_positions);
+}
+
+void InformationGatherer3D::update(
+    const Geometry3D& geometry,
+    const AgentContainer<GenericAgent>& agents)
+{
+    std::vector<Point3D> positions{};
+    positions.reserve(agents.size());
+    for(const auto& agent : agents) {
+        const auto anchor = geometry.locate_in_region(agent.regionId, {agent.pos.x, agent.pos.y});
+        if(anchor.face == SurfaceMesh::null_face()) {
+            throw SimulationError(
+                "Agent {} at {} is not on the surface of region {}",
+                agent.id,
+                agent.pos,
+                agent.regionId);
+        }
+        positions.push_back(anchor.point);
+    }
+    update(agents, std::move(positions));
 }
 
 void InformationGatherer3D::add(

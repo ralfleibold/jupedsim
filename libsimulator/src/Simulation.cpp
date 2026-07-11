@@ -85,12 +85,22 @@ void Simulation::Iterate()
 
     {
         JPS_SCOPED_TIMER_AND_TRACE(_timer, "Neighborhood Search", Detailed);
-        _neighborhoodSearch.Update(_agents);
+        if(_gatherer3d) {
+            // Re-anchor after agent removal; run_surface_step consumes this
+            // index and refreshes it once more after the agents moved.
+            _gatherer3d->update(*_geometry3d, _agents);
+        } else {
+            _neighborhoodSearch.Update(_agents);
+        }
     }
 
     {
         JPS_SCOPED_TIMER_AND_TRACE(_timer, "Stage System", Detailed);
-        _stageSystem.Run(_stageManager, _neighborhoodSearch, *_geometry);
+        if(_gatherer3d) {
+            _stageSystem.RunOnSurface(_stageManager, *_gatherer3d, *_geometry3d);
+        } else {
+            _stageSystem.Run(_stageManager, _neighborhoodSearch, *_geometry);
+        }
     }
 
     {
@@ -276,9 +286,10 @@ GenericAgent::ID Simulation::AddAgent(GenericAgent agent)
 
     _stageManager.HandleNewAgent(agent.stageId);
     _agents.emplace_back(std::move(agent));
-    _neighborhoodSearch.AddAgent(_agents.back());
     if(_gatherer3d) {
         _gatherer3d->add(_agents, anchor.point);
+    } else {
+        _neighborhoodSearch.AddAgent(_agents.back());
     }
 
     auto v = IteratorPair(std::prev(std::end(_agents)), std::end(_agents));
@@ -374,6 +385,19 @@ void Simulation::SwitchAgentJourney(
 std::vector<GenericAgent::ID> Simulation::AgentsInRange(Point p, double distance)
 {
     JPS_SCOPED_TIMER_AND_TRACE(_timer, "Agents in Range", Debug);
+    if(_gatherer3d) {
+        // Horizontal-only interim: the vertical semantic of the public
+        // queries (which level?) is an open API decision (Road-to-full-3D,
+        // C8); under the single-region guard the exact 2D scan is correct.
+        std::vector<GenericAgent::ID> result{};
+        const auto radiusSquared = distance * distance;
+        for(const auto& agent : _agents) {
+            if(DistanceSquared(agent.pos, p) <= radiusSquared) {
+                result.push_back(agent.id);
+            }
+        }
+        return result;
+    }
     const auto neighbors = _neighborhoodSearch.GetNeighboringAgents(p, distance);
 
     std::vector<GenericAgent::ID> neighborIds{};
@@ -392,6 +416,17 @@ std::vector<GenericAgent::ID> Simulation::AgentsInPolygon(const std::vector<Poin
     const Polygon poly{polygon};
     if(!poly.IsConvex()) {
         throw SimulationError("Polygon needs to be simple and convex");
+    }
+    if(_gatherer3d) {
+        // Same horizontal-only interim as AgentsInRange (the circle prefilter
+        // of the 2D path is pure acceleration).
+        std::vector<GenericAgent::ID> result{};
+        for(const auto& agent : _agents) {
+            if(poly.IsInside(agent.pos)) {
+                result.push_back(agent.id);
+            }
+        }
+        return result;
     }
     const auto [p, dist] = poly.ContainingCircle();
 

@@ -12,8 +12,10 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <map>
 #include <memory>
+#include <utility>
 #include <vector>
 
 namespace
@@ -131,6 +133,115 @@ TEST(Simulation, ValidatesNewAgentsInBothModes)
         // The agent just added is itself visible to validation right away.
         EXPECT_THROW(simulation->AddAgent(agent_at({3.1, 1})), SimulationError);
     }
+}
+
+TEST(Simulation, PublicAgentQueriesMatchAcrossModes)
+{
+    // AgentsInRange / AgentsInPolygon answer from the mode's own bookkeeping
+    // (2D grid vs. surface scan); membership must be identical.
+    for(const bool runIn2d : {true, false}) {
+        SCOPED_TRACE(runIn2d ? "2d" : "surface");
+        const auto simulation = l_corridor_simulation(false, runIn2d);
+        const auto& first = simulation->Agents().front();
+        for(const auto x : {3.0, 6.0}) {
+            simulation->AddAgent(GenericAgent(
+                GenericAgent::ID::Invalid,
+                first.journeyId,
+                first.stageId,
+                {x, 1},
+                CollisionFreeSpeedModelData{}));
+        }
+
+        const auto xs_of = [&simulation](const std::vector<GenericAgent::ID>& ids) {
+            std::vector<double> xs{};
+            for(const auto id : ids) {
+                xs.push_back(simulation->Agent(id).pos.x);
+            }
+            std::sort(xs.begin(), xs.end());
+            return xs;
+        };
+        // Around (1,1) with radius 2.5: the agents at x=1 and x=3.
+        EXPECT_EQ(xs_of(simulation->AgentsInRange({1, 1}, 2.5)), (std::vector<double>{1, 3}));
+        // The box [2,7]x[0,2]: the agents at x=3 and x=6.
+        EXPECT_EQ(
+            xs_of(simulation->AgentsInPolygon({{2, 0}, {7, 0}, {7, 2}, {2, 2}})),
+            (std::vector<double>{3, 6}));
+    }
+}
+
+TEST(Simulation, QueueBehaviorMatchesAcrossModes)
+{
+    // A queue exercises the stage system's world queries (slot surroundings,
+    // wall visibility) each step -- through the 2D grid in one mode and the
+    // surface gatherer in the other. Occupancy decisions feed back into the
+    // walk, so identical trajectories mean identical stage behavior. The pop
+    // and the following exit also cover agent removal (which forces the
+    // surface index rebuild at the start of the next iteration).
+    const auto build = [](bool runIn2d) {
+        GeometryBuilder builder{};
+        builder.AddAccessibleArea({{0, 0}, {10, 0}, {10, 10}, {8, 10}, {8, 2}, {0, 2}});
+        auto geometry = std::make_unique<Geometry3D>();
+        geometry->initialize_from_polygon(builder.Build().Polygon());
+        auto routingEngine =
+            std::make_unique<RoutingEngine>(geometry->collision_geometry()->Polygon());
+        auto simulation = std::make_unique<Simulation>(
+            std::make_unique<CollisionFreeSpeedModel>(CollisionFreeSpeedModel{8.0, 0.1, 5.0, 0.02}),
+            std::move(geometry),
+            std::move(routingEngine),
+            0.01,
+            runIn2d);
+        const auto queueId = simulation->AddStage(
+            NotifiableQueueDescription{std::vector<Point>{{6, 1}, {5, 1}}});
+        const auto exitId = simulation->AddStage(
+            ExitDescription{Polygon{std::vector<Point>{{8, 9}, {10, 9}, {10, 10}, {8, 10}}}});
+        const auto journeyId = simulation->AddJourney(
+            {{queueId, FixedTransitionDescription{exitId}}, {exitId, NonTransitionDescription{}}});
+        for(const auto x : {1.0, 2.0}) {
+            simulation->AddAgent(GenericAgent(
+                GenericAgent::ID::Invalid,
+                journeyId,
+                queueId,
+                {x, 1},
+                CollisionFreeSpeedModelData{}));
+        }
+        return std::make_pair(std::move(simulation), queueId);
+    };
+
+    auto [in2d, queue2dId] = build(true);
+    auto [onSurface, queueSurfaceId] = build(false);
+
+    const auto compare_step = [&](int step) {
+        ASSERT_EQ(in2d->AgentCount(), onSurface->AgentCount()) << "step " << step;
+        auto expected = in2d->Agents().begin();
+        for(const auto& actual : onSurface->Agents()) {
+            ASSERT_NEAR(actual.pos.x, expected->pos.x, 1e-9) << "step " << step;
+            ASSERT_NEAR(actual.pos.y, expected->pos.y, 1e-9) << "step " << step;
+            ++expected;
+        }
+    };
+
+    for(int step = 0; step < 600; ++step) {
+        in2d->Iterate();
+        onSurface->Iterate();
+        compare_step(step);
+    }
+    // Both queues filled up the same way.
+    auto queue2d = std::get<NotifiableQueueProxy>(in2d->Stage(queue2dId));
+    auto queueSurface = std::get<NotifiableQueueProxy>(onSurface->Stage(queueSurfaceId));
+    ASSERT_EQ(queue2d.CountEnqueued(), 2u);
+    ASSERT_EQ(queueSurface.CountEnqueued(), 2u);
+
+    // Release the head of both queues; it walks off to the exit and is
+    // removed, the second agent advances.
+    queue2d.Pop(1);
+    queueSurface.Pop(1);
+    for(int step = 0; step < 1500; ++step) {
+        in2d->Iterate();
+        onSurface->Iterate();
+        compare_step(step);
+    }
+    EXPECT_EQ(in2d->AgentCount(), 1u);
+    EXPECT_EQ(onSurface->AgentCount(), 1u);
 }
 
 TEST(Simulation, RejectsGeometryWithoutThe2DView)

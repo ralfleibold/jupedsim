@@ -40,7 +40,7 @@ TEST_F(StagesTests, NotifiableWaitingSetTargetIsCorrect)
         const auto& target = waitingSet.Target(agent);
         ASSERT_EQ(target, waitingPoints[i]);
 
-        waitingSet.Update(neighborhoodSearch, *collisionGeometry);
+        waitingSet.Update(stage_query_2d(neighborhoodSearch, *collisionGeometry));
     }
 
     // Each next agent gets the last slot
