@@ -130,9 +130,7 @@ def test_run_in_2d_flag_reproduces_trajectories_on_buw(agent_count):
         sim_surface.iterate()
         assert sim_surface.agent_count() == sim_2d.agent_count()
         for expected, actual in zip(sim_2d.agents(), sim_surface.agents()):
-            assert actual.position == pytest.approx(
-                expected.position, abs=1e-9
-            )
+            assert actual.position == pytest.approx(expected.position, abs=1e-9)
 
 
 def test_run_in_2d_flag_reproduces_trajectories():
@@ -144,9 +142,7 @@ def test_run_in_2d_flag_reproduces_trajectories():
         sim_2d.iterate()
         sim_surface.iterate()
         for expected, actual in zip(sim_2d.agents(), sim_surface.agents()):
-            assert actual.position == pytest.approx(
-                expected.position, abs=1e-9
-            )
+            assert actual.position == pytest.approx(expected.position, abs=1e-9)
 
 
 BAD_ASTAR_ROUTINGS = [

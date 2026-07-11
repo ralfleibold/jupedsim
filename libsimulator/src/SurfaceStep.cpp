@@ -19,8 +19,7 @@ void run_surface_step(
     std::vector<Point3D> positions{};
     positions.reserve(agentCount);
     for(const auto& agent : agents) {
-        const auto anchor =
-            geometry.locate_in_region(agent.regionId, {agent.pos.x, agent.pos.y});
+        const auto anchor = geometry.locate_in_region(agent.regionId, {agent.pos.x, agent.pos.y});
         if(anchor.face == SurfaceMesh::null_face()) {
             throw SimulationError(
                 "Agent {} at {} is not on the surface of region {}",
@@ -47,8 +46,8 @@ void run_surface_step(
         auto& agent = agents[i];
         const auto from = agent.pos;
         model.ApplyUpdate(updates[i], agent);
-        const auto anchor = geometry.walk_on_surface(
-            agent.regionId, {from.x, from.y}, {agent.pos.x, agent.pos.y});
+        const auto anchor =
+            geometry.walk_on_surface(agent.regionId, {from.x, from.y}, {agent.pos.x, agent.pos.y});
         agent.regionId = geometry.region_of(anchor.face);
     }
 }

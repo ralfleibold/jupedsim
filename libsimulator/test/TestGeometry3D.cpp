@@ -243,8 +243,8 @@ TEST(Geometry3DFromPolygon, LiftReproducesThe2DTriangulation)
     std::vector<std::pair<double, double>> expected{};
     for(auto f = cdt.finite_faces_begin(); f != cdt.finite_faces_end(); ++f) {
         if(f->get_in_domain()) {
-            const auto c = CGAL::centroid(
-                f->vertex(0)->point(), f->vertex(1)->point(), f->vertex(2)->point());
+            const auto c =
+                CGAL::centroid(f->vertex(0)->point(), f->vertex(1)->point(), f->vertex(2)->point());
             expected.emplace_back(c.x(), c.y());
         }
     }

@@ -44,8 +44,7 @@ bool RoutingEngine::IsValidLocation(const Location& loc) const
 std::tuple<std::vector<Point3D>, double>
 RoutingEngine::GetShortestPath(const Point3D& source, const Location& target)
 {
-    const auto waypoints =
-        ComputeAllWaypoints({source.x(), source.y()}, {target.x(), target.y()});
+    const auto waypoints = ComputeAllWaypoints({source.x(), source.y()}, {target.x(), target.y()});
     std::vector<Point3D> path{};
     path.reserve(waypoints.size());
     double cost = 0;

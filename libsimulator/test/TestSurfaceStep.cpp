@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-#include "SurfaceStep.hpp"
-
 #include "GenericAgent.hpp"
-#include "GeometryBuilder.hpp"
 #include "Geometry3D.hpp"
+#include "GeometryBuilder.hpp"
 #include "InformationGatherer3D.hpp"
 #include "NeighborhoodSearch.hpp"
 #include "OperationalDecisionSystem.hpp"
 #include "OperationalModels/CollisionFreeSpeedModel/CollisionFreeSpeedModel.hpp"
+#include "SurfaceStep.hpp"
 
 #include <gtest/gtest.h>
 

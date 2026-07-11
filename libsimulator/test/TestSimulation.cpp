@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-#include "Simulation.hpp"
-
 #include "GenericAgent.hpp"
 #include "Geometry3D.hpp"
 #include "GeometryBuilder.hpp"
 #include "Journey.hpp"
 #include "OperationalModels/CollisionFreeSpeedModel/CollisionFreeSpeedModel.hpp"
 #include "RoutingEngine.hpp"
+#include "Simulation.hpp"
 #include "SimulationError.hpp"
 #include "StageDescription.hpp"
 #include "SurfaceMeshShortestPathRoutingEngine.hpp"
@@ -120,8 +119,7 @@ TEST(Simulation, RejectsGeometryWithoutThe2DView)
 
     EXPECT_THROW(
         Simulation(
-            std::make_unique<CollisionFreeSpeedModel>(
-                CollisionFreeSpeedModel{8.0, 0.1, 5.0, 0.02}),
+            std::make_unique<CollisionFreeSpeedModel>(CollisionFreeSpeedModel{8.0, 0.1, 5.0, 0.02}),
             std::move(geometry),
             std::move(routingEngine),
             0.01),
