@@ -235,9 +235,8 @@ BaseStage::ID Simulation::AddStage(const StageDescription stageDescription)
 GenericAgent::ID Simulation::AddAgent(GenericAgent agent)
 {
     JPS_SCOPED_TIMER_AND_TRACE(_timer, "Add Agent", Detailed);
-    if(!_geometry->InsideGeometry(agent.pos)) {
-        throw SimulationError("Agent {} not inside walkable area", agent.pos);
-    }
+    // The anchor of the new agent on the surface; only set in surface mode.
+    Geometry3D::FaceLocation anchor{SurfaceMesh::null_face(), {}};
     if(_gatherer3d) {
         auto num_regions = _geometry3d->region_count();
         if(num_regions > 1) {
@@ -245,6 +244,12 @@ GenericAgent::ID Simulation::AddAgent(GenericAgent agent)
                 "FIXME: Real 3D not yet supported, but found {} regions.", num_regions);
         }
         agent.regionId = 0;
+        anchor = _geometry3d->locate_in_region(agent.regionId, {agent.pos.x, agent.pos.y});
+        if(anchor.face == SurfaceMesh::null_face()) {
+            throw SimulationError("Agent {} not inside walkable area", agent.pos);
+        }
+    } else if(!_geometry->InsideGeometry(agent.pos)) {
+        throw SimulationError("Agent {} not inside walkable area", agent.pos);
     }
     if(_journeys.count(agent.journeyId) == 0) {
         throw SimulationError("Unknown journey id: {}", agent.journeyId);
@@ -263,11 +268,18 @@ GenericAgent::ID Simulation::AddAgent(GenericAgent agent)
             ToString(_operationalDecisionSystem.ModelType()));
     }
 
-    _operationalDecisionSystem.ValidateAgent(agent, _neighborhoodSearch, *_geometry);
+    if(_gatherer3d) {
+        _operationalDecisionSystem.ValidateAgentOnSurface(agent, anchor.point, *_gatherer3d);
+    } else {
+        _operationalDecisionSystem.ValidateAgent(agent, _neighborhoodSearch, *_geometry);
+    }
 
     _stageManager.HandleNewAgent(agent.stageId);
     _agents.emplace_back(std::move(agent));
     _neighborhoodSearch.AddAgent(_agents.back());
+    if(_gatherer3d) {
+        _gatherer3d->add(_agents, anchor.point);
+    }
 
     auto v = IteratorPair(std::prev(std::end(_agents)), std::end(_agents));
     _stategicalDecisionSystem.Run(_journeys, v, _stageManager);

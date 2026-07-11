@@ -104,6 +104,35 @@ TEST(Simulation, SurfaceOperationalPathReproducesThe2DPath)
     EXPECT_GT(in2d->Agents().front().pos.x, 5.0);
 }
 
+TEST(Simulation, ValidatesNewAgentsInBothModes)
+{
+    // Adding happens outside Iterate, so surface mode must see already-added
+    // agents through the incrementally maintained index, not only through the
+    // per-step update. Verdicts must match the 2D path.
+    for(const bool runIn2d : {true, false}) {
+        SCOPED_TRACE(runIn2d ? "2d" : "surface");
+        const auto simulation = l_corridor_simulation(false, runIn2d);
+        const auto& first = simulation->Agents().front();
+        const auto agent_at = [journeyId = first.journeyId,
+                               stageId = first.stageId](Point pos) {
+            return GenericAgent(
+                GenericAgent::ID::Invalid, journeyId, stageId, pos, CollisionFreeSpeedModelData{});
+        };
+
+        // Outside the walkable area.
+        EXPECT_THROW(simulation->AddAgent(agent_at({-50, -50})), SimulationError);
+        // On top of the initial agent (contact distance 0.4).
+        EXPECT_THROW(simulation->AddAgent(agent_at({1, 1})), SimulationError);
+        // Closer to the wall y=0 than the agent radius 0.2.
+        EXPECT_THROW(simulation->AddAgent(agent_at({3, 0.1})), SimulationError);
+
+        // Clear of the agent and all walls.
+        EXPECT_NO_THROW(simulation->AddAgent(agent_at({3, 1})));
+        // The agent just added is itself visible to validation right away.
+        EXPECT_THROW(simulation->AddAgent(agent_at({3.1, 1})), SimulationError);
+    }
+}
+
 TEST(Simulation, RejectsGeometryWithoutThe2DView)
 {
     // Built from a mesh, not a polygon: no projected 2D view. The operational

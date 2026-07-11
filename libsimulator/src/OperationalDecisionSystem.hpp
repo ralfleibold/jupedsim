@@ -84,6 +84,20 @@ public:
             Gather(agent, _model->ConstraintRequirements(agent), neighborhoodSearch, geometry));
     }
 
+    /// Validation counterpart of RunOnSurface: the candidate agent (anchored
+    /// on the surface at @p anchor) is checked against the gatherer's current
+    /// index, which it is not part of yet.
+    void ValidateAgentOnSurface(
+        const GenericAgent& agent,
+        const Point3D& anchor,
+        const InformationGatherer3D& gatherer) const
+    {
+        std::vector<LineSegment> wallBuffer{};
+        _model->CheckModelConstraint(
+            agent,
+            gatherer.gather_at(anchor, _model->ConstraintRequirements(agent), wallBuffer));
+    }
+
 private:
     InformationForUpdate Gather(
         const GenericAgent& agent,

@@ -49,6 +49,7 @@ class NeighborhoodSearch3D
 {
     double _cellSize;
     std::unordered_map<Grid3DIndex, std::vector<std::size_t>> _grid{};
+    std::size_t _size{0};
 
     Grid3DIndex get_index(const Point3D& p) const
     {
@@ -68,11 +69,15 @@ public:
     void rebuild_index(R&& positions)
     {
         _grid.clear();
-        std::size_t i = 0;
+        _size = 0;
         for(const Point3D& p : positions) {
-            _grid[get_index(p)].push_back(i++);
+            _grid[get_index(p)].push_back(_size++);
         }
     }
+
+    /// Index one more position appended to the enumeration (its index is the
+    /// number of positions indexed so far).
+    void add_position(const Point3D& p) { _grid[get_index(p)].push_back(_size++); }
 
     /// Quick, broad check within "cylinder" with radius r horizontally (x/y positions) and
     /// height (against z position). This will set the list of candidates which will be filtered

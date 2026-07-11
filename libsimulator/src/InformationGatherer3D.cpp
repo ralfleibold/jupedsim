@@ -25,12 +25,29 @@ void InformationGatherer3D::update(
     _search.rebuild_index(_positions);
 }
 
+void InformationGatherer3D::add(
+    const AgentContainer<GenericAgent>& agents,
+    const Point3D& position)
+{
+    assert(agents.size() == _positions.size() + 1);
+    _agents = &agents;
+    _positions.push_back(position);
+    _search.add_position(position);
+}
+
 InformationForUpdate InformationGatherer3D::gather(
     std::size_t agentIndex,
     const InformationRequirements& requirements,
     std::vector<LineSegment>& wallBuffer) const
 {
-    const auto& position = _positions[agentIndex];
+    return gather_at(_positions[agentIndex], requirements, wallBuffer);
+}
+
+InformationForUpdate InformationGatherer3D::gather_at(
+    const Point3D& position,
+    const InformationRequirements& requirements,
+    std::vector<LineSegment>& wallBuffer) const
+{
     InformationForUpdate info{};
 
     if(requirements.neighborRadius) {
