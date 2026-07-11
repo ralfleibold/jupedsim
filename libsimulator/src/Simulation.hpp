@@ -40,9 +40,11 @@ class Simulation
     StageManager _stageManager{};
     StageSystem _stageSystem{};
     NeighborhoodSearch<GenericAgent> _neighborhoodSearch{2.2};
-    std::unique_ptr<CollisionGeometry> _geometry{};
-    /// Present iff routing runs on the surface mesh; the engine borrows it.
     std::unique_ptr<Geometry3D> _geometry3d{};
+    /// The projected 2D view owned by _geometry3d. The operational layer
+    /// (collision handling, position validation) still runs in 2D, so the
+    /// view is required until the 3D surface step replaces it.
+    const CollisionGeometry* _geometry{};
     std::unique_ptr<RoutingEngine3D> _routingEngine{};
     AgentContainer<GenericAgent> _agents;
     std::vector<GenericAgent::ID> _removedAgentsInLastIteration;
@@ -51,16 +53,16 @@ class Simulation
     enum LogLevel { General = 1, Detailed = 2, Debug = 3 };
 
 public:
-    /// @p geometry3d selects the routing engine: without it the legacy 2D
-    /// engine (A* + funnel, 0.2 m wall clearance) is built from @p geometry;
-    /// with it, routing runs exact geodesics on the surface mesh (for the 2D
-    /// world: the flat z=0 lift of the same polygon). Transitional seam -- at
-    /// the 3D switch the surface path becomes the only one.
+    /// Simulation owns @p geometry (the single source of truth); the injected
+    /// @p routingEngine must have been constructed against that same geometry
+    /// (it borrows, never owns). @p geometry must carry the projected 2D view
+    /// (collision_geometry() != nullptr, i.e. built from a polygon) as long as
+    /// the operational layer runs in 2D.
     Simulation(
         std::unique_ptr<OperationalModel>&& operationalModel,
-        std::unique_ptr<CollisionGeometry>&& geometry,
-        double dT,
-        std::unique_ptr<Geometry3D> geometry3d = nullptr);
+        std::unique_ptr<Geometry3D>&& geometry,
+        std::unique_ptr<RoutingEngine3D>&& routingEngine,
+        double dT);
     Simulation(const Simulation& other) = delete;
     Simulation& operator=(const Simulation& other) = delete;
     Simulation(Simulation&& other) = delete;

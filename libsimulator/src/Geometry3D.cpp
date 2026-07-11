@@ -70,6 +70,8 @@ void Geometry3D::initialize_from_obj(const std::string& path)
 
 void Geometry3D::initialize_from_mesh(SurfaceMesh&& mesh)
 {
+    // A mesh carries no 2D view; only initialize_from_polygon (re)creates one.
+    _collisionGeometry.reset();
     _mesh = std::move(mesh);
     build();
 }
@@ -104,6 +106,7 @@ void Geometry3D::initialize_from_polygon(const PolyWithHoles& poly)
         }
     }
     initialize_from_mesh(std::move(mesh));
+    _collisionGeometry = std::make_unique<CollisionGeometry>(poly);
 }
 
 void Geometry3D::build()

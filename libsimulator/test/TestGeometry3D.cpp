@@ -181,11 +181,12 @@ TEST(Geometry3DWalk, WalkTargetOutsideNeighbourhoodThrows)
 
 namespace
 {
-/// 10x10 square with a centred 2x2 hole, the 2D input shape.
+/// 10x10 square with a centred 2x2 hole, the 2D input shape. Oriented as
+/// CollisionGeometry::Polygon() delivers it: outer CCW, hole CW.
 PolyWithHoles square_with_hole()
 {
     const std::vector<K::Point_2> outer{{0, 0}, {10, 0}, {10, 10}, {0, 10}};
-    const std::vector<K::Point_2> hole{{4, 4}, {6, 4}, {6, 6}, {4, 6}};
+    const std::vector<K::Point_2> hole{{4, 4}, {4, 6}, {6, 6}, {6, 4}};
     PolyWithHoles poly{Poly(outer.begin(), outer.end())};
     poly.add_hole(Poly(hole.begin(), hole.end()));
     return poly;
@@ -205,6 +206,21 @@ TEST(Geometry3DFromPolygon, HoleIsNotWalkable)
     for(const auto& v : geo.vertices()) {
         EXPECT_EQ(v[2], 0.0);
     }
+}
+
+TEST(Geometry3DFromPolygon, OwnsTheProjected2DView)
+{
+    Geometry3D geo{};
+    geo.initialize_from_polygon(square_with_hole());
+
+    const auto* view = geo.collision_geometry();
+    ASSERT_NE(view, nullptr);
+    EXPECT_TRUE(view->InsideGeometry({1, 1}));
+    EXPECT_FALSE(view->InsideGeometry({5, 5})); // inside the hole
+
+    // A mesh carries no 2D view; re-initializing drops the stale one.
+    geo.initialize_from_mesh(flat_room());
+    EXPECT_EQ(geo.collision_geometry(), nullptr);
 }
 
 TEST(Geometry3DFromPolygon, LiftReproducesThe2DTriangulation)

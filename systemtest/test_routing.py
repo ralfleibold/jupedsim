@@ -48,16 +48,20 @@ def test_routing_engine_without_excluded_areas():
     assert engine is not None
 
 
-@pytest.mark.parametrize("surface_routing", [False, True])
-def test_simulation_evacuates_l_corridor_with_either_routing(surface_routing):
-    """Smoke test for the transitional surface_routing flag: the agent has to
-    round the inner corner (8, 2) and reach the exit with both engines. The
+@pytest.mark.parametrize(
+    "routing_engine",
+    [jps.TAStarRouting(), jps.SurfaceGeodesicRouting()],
+    ids=lambda engine: type(engine).__name__,
+)
+def test_simulation_evacuates_l_corridor_with_either_routing(routing_engine):
+    """Smoke test for the routing_engine parameter: the agent has to round the
+    inner corner (8, 2) and reach the exit with both engines. The
     engine-selection behavior itself is asserted in the C++ test
-    Simulation.SurfaceRoutingSeamSelectsTheRoutingEngine."""
+    Simulation.UsesTheInjectedRoutingEngine."""
     sim = jps.Simulation(
         model=jps.CollisionFreeSpeedModel(),
         geometry=[(0, 0), (10, 0), (10, 10), (8, 10), (8, 2), (0, 2)],
-        surface_routing=surface_routing,
+        routing_engine=routing_engine,
     )
     exit_id = sim.add_exit_stage([(8, 9), (10, 9), (10, 10), (8, 10)])
     journey_id = sim.add_journey(jps.JourneyDescription([exit_id]))

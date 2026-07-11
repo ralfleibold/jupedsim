@@ -43,6 +43,7 @@ from jupedsim.models.warp_driver import (
     WarpDriverModel,
     WarpDriverModelAgentParameters,
 )
+from jupedsim.routing import SurfaceGeodesicRouting, TAStarRouting
 from jupedsim.serialization import TrajectoryWriter
 from jupedsim.stages import (
     ExitStage,
@@ -86,7 +87,7 @@ class Simulation:
         dt: float = 0.01,
         trajectory_writer: TrajectoryWriter | None = None,
         timer_log_level: int = 1,
-        surface_routing: bool = False,
+        routing_engine: TAStarRouting | SurfaceGeodesicRouting | None = None,
         **kwargs: Any,
     ) -> None:
         """Creates a Simulation.
@@ -115,13 +116,14 @@ class Simulation:
                 TrajectoryWriter interface. JuPedSim provides a writer that outputs trajectory data
                 in a sqlite database. If you want other formats such as CSV you need to provide
                 your own custom implementation.
-            surface_routing: Experimental, transitional. Route via exact
-                geodesics on the surface mesh (the flat z=0 lift of the given
-                geometry) instead of the legacy 2D engine. Note the legacy
-                engine keeps 0.2 m wall clearance at corners, the surface
-                engine does not, so trajectories differ near corners. This
-                flag validates the future 3D routing path and will disappear
-                once it becomes the default.
+            routing_engine: Selects how agents' route waypoints are computed.
+                :class:`~jupedsim.routing.TAStarRouting` (the default): A* on
+                the triangulated walkable area plus funnel smoothing, keeping
+                0.2 m wall clearance at corners.
+                :class:`~jupedsim.routing.SurfaceGeodesicRouting`: exact
+                geodesics on the surface mesh (currently the flat lift of the
+                given geometry) -- the future 3D routing path; it keeps no
+                wall clearance, so trajectories differ near corners.
 
         Keyword Arguments:
             excluded_areas: describes exclusions
@@ -178,12 +180,20 @@ class Simulation:
             py_jps_model = py_jps._PythonModel(model)
         else:
             raise Exception("Unknown model type supplied")
+        if routing_engine is None:
+            routing_engine = TAStarRouting()
+        if isinstance(routing_engine, TAStarRouting):
+            routing_engine_name = "tastar"
+        elif isinstance(routing_engine, SurfaceGeodesicRouting):
+            routing_engine_name = "surface_geodesic"
+        else:
+            raise Exception("Unknown routing engine supplied")
         self._writer = trajectory_writer
         self._obj = py_jps.Simulation(
             model=py_jps_model,
             geometry=build_geometry(geometry)._obj,
             dt=dt,
-            surface_routing=surface_routing,
+            routing_engine=routing_engine_name,
         )
         self._timer = Timer(self._obj, timer_log_level=timer_log_level)
 

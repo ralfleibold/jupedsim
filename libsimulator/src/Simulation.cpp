@@ -10,9 +10,7 @@
 #include "OperationalModelType.hpp"
 #include "Point.hpp"
 #include "Polygon.hpp"
-#include "RoutingEngine.hpp"
 #include "SimulationClock.hpp"
-#include "SurfaceMeshShortestPathRoutingEngine.hpp"
 #include "SimulationError.hpp"
 #include "Stage.hpp"
 #include "StageDescription.hpp"
@@ -33,19 +31,26 @@
 
 Simulation::Simulation(
     std::unique_ptr<OperationalModel>&& operationalModel,
-    std::unique_ptr<CollisionGeometry>&& geometry,
-    double dT,
-    std::unique_ptr<Geometry3D> geometry3d)
+    std::unique_ptr<Geometry3D>&& geometry,
+    std::unique_ptr<RoutingEngine3D>&& routingEngine,
+    double dT)
     : _clock(dT)
     , _operationalDecisionSystem(std::move(operationalModel))
-    , _geometry(std::move(geometry))
-    , _geometry3d(std::move(geometry3d))
-    , _routingEngine(
-          _geometry3d ?
-              std::unique_ptr<RoutingEngine3D>(
-                  std::make_unique<SurfaceMeshShortestPathRoutingEngine>(*_geometry3d)) :
-              std::make_unique<RoutingEngine>(_geometry->Polygon()))
+    , _geometry3d(std::move(geometry))
+    , _routingEngine(std::move(routingEngine))
 {
+    if(!_geometry3d) {
+        throw SimulationError("Simulation requires a geometry.");
+    }
+    if(!_routingEngine) {
+        throw SimulationError("Simulation requires a routing engine.");
+    }
+    _geometry = _geometry3d->collision_geometry();
+    if(!_geometry) {
+        throw SimulationError(
+            "The geometry has no projected 2D view (it was not built from a polygon); "
+            "the simulation still requires one for collision handling.");
+    }
 }
 
 const SimulationClock& Simulation::Clock() const

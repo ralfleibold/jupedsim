@@ -4,10 +4,12 @@
 #include "CollisionGeometry.hpp"
 #include "Geometry3D.hpp"
 #include "Journey.hpp"
+#include "RoutingEngine.hpp"
 #include "OperationalModel.hpp"
 #include "Polygon.hpp"
 #include "Stage.hpp"
 #include "StageDescription.hpp"
+#include "SurfaceMeshShortestPathRoutingEngine.hpp"
 #include "conversion.hpp"
 
 #include <pybind11/attr.h>
@@ -20,6 +22,7 @@
 #include <map>
 #include <memory>
 #include <stdexcept>
+#include <string>
 #include <tuple>
 #include <vector>
 
@@ -36,27 +39,34 @@ void init_simulation(py::module_& m)
                 [](std::unique_ptr<OperationalModel> model,
                    CollisionGeometry geometry,
                    double dT,
-                   bool surface_routing) {
+                   const std::string& routing_engine) {
                     if(!model) {
                         throw std::invalid_argument("model must not be None");
                     }
-                    auto collisionGeometry = std::make_unique<CollisionGeometry>(geometry);
-                    std::unique_ptr<Geometry3D> geometry3d{};
-                    if(surface_routing) {
-                        geometry3d = std::make_unique<Geometry3D>();
-                        geometry3d->initialize_from_polygon(collisionGeometry->Polygon());
+                    auto geometry3d = std::make_unique<Geometry3D>();
+                    geometry3d->initialize_from_polygon(geometry.Polygon());
+                    std::unique_ptr<RoutingEngine3D> routingEngine{};
+                    if(routing_engine == "tastar") {
+                        routingEngine = std::make_unique<RoutingEngine>(
+                            geometry3d->collision_geometry()->Polygon());
+                    } else if(routing_engine == "surface_geodesic") {
+                        routingEngine =
+                            std::make_unique<SurfaceMeshShortestPathRoutingEngine>(*geometry3d);
+                    } else {
+                        throw std::invalid_argument(
+                            "unknown routing engine: " + routing_engine);
                     }
                     return std::make_unique<Simulation>(
                         std::move(model),
-                        std::move(collisionGeometry),
-                        dT,
-                        std::move(geometry3d));
+                        std::move(geometry3d),
+                        std::move(routingEngine),
+                        dT);
                 }),
             py::kw_only(),
             py::arg("model"),
             py::arg("geometry"),
             py::arg("dt"),
-            py::arg("surface_routing") = false)
+            py::arg("routing_engine") = "tastar")
         .def(
             "add_waypoint_stage",
             [](Simulation& sim, std::tuple<double, double> position, double distance) {

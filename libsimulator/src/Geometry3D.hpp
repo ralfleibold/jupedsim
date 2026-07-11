@@ -2,6 +2,7 @@
 #pragma once
 
 #include "CfgCgal.hpp"
+#include "CollisionGeometry.hpp"
 #include "Point.hpp"
 #include "RegionSplit.hpp"
 
@@ -52,6 +53,13 @@ public:
     const SurfaceMesh& mesh() const { return _mesh; }
     const AABBTree& aabb_tree() const;
 
+    /// The projected 2D view of the walkable area, present iff the geometry
+    /// was built from a polygon (initialize_from_polygon). 2D consumers --
+    /// collision handling, position validation, 2D routing engines -- run on
+    /// this view; a mesh-built geometry has none (nullptr) until deriving it
+    /// from the mesh boundary is implemented.
+    const CollisionGeometry* collision_geometry() const { return _collisionGeometry.get(); }
+
     /// Face and on-surface point hit by the -z ray through @p p, or
     /// `null_face()` if the ray misses the walkable surface.
     FaceLocation face_below(const Point3D& p) const;
@@ -97,6 +105,7 @@ private:
     void build();
 
     SurfaceMesh _mesh{};
+    std::unique_ptr<CollisionGeometry> _collisionGeometry{};
     std::unique_ptr<AABBTree> _aabbTree{};
     RegionMap _region{};
     std::size_t _regionCount{0};

@@ -1,11 +1,32 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
+from dataclasses import dataclass
 from typing import Any
 
 import shapely
 
 import jupedsim.native as py_jps
 from jupedsim.geometry_utils import build_geometry
+
+
+@dataclass
+class TAStarRouting:
+    """Routing on the triangulated walkable area with A* and funnel smoothing.
+
+    The funnel keeps 0.2 m clearance to walls at corners. This is the default
+    routing of :class:`~jupedsim.simulation.Simulation`.
+    """
+
+
+@dataclass
+class SurfaceGeodesicRouting:
+    """Routing along exact geodesics on the surface mesh.
+
+    Runs on the flat z=0 lift of the given 2D geometry and is the basis of the
+    upcoming 3D (multi-level) navigation. Unlike :class:`TAStarRouting` it
+    keeps no wall clearance -- paths pivot exactly on corners, so trajectories
+    differ near corners.
+    """
 
 
 class RoutingEngine:
