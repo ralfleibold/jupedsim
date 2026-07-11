@@ -225,35 +225,45 @@ class Simulation:
         self._timer = Timer(self._obj, timer_log_level=timer_log_level)
 
     def add_waypoint_stage(
-        self, position: tuple[float, float], distance
+        self, position: tuple[float, float], distance, z_hint: float = 0.0
     ) -> int:
         """Add a new waypoint stage to this simulation.
 
         Arguments:
             position: Position of the waypoint
             distance: Minimum distance required to reach this waypoint
+            z_hint: On multi-level (mesh) geometry, the approximate height of
+                the stage. The stage anchors on the surface sheet whose height
+                at ``position`` is within 0.25 m of the hint; without a match
+                it raises. Leave at 0.0 for single-level geometry.
 
         Returns:
             Id of the new stage.
 
         """
-        return self._obj.add_waypoint_stage(position, distance)
+        return self._obj.add_waypoint_stage(position, distance, z_hint)
 
-    def add_queue_stage(self, positions: list[tuple[float, float]]) -> int:
+    def add_queue_stage(
+        self, positions: list[tuple[float, float]], z_hint: float = 0.0
+    ) -> int:
         """Add a new queue state to this simulation.
 
          Arguments:
              positions: Ordered list of the waiting
                  points of this queue. The first one in the list is the head of
                  the queue while the last one is the back of the queue.
+             z_hint: On multi-level (mesh) geometry, the approximate height of
+                 the stage. Each slot anchors on the surface sheet whose height
+                 there is within 0.25 m of the hint; without a match it raises.
+                 Leave at 0.0 for single-level geometry.
         Returns:
              Id of the new stage.
 
         """
-        return self._obj.add_queue_stage(positions)
+        return self._obj.add_queue_stage(positions, z_hint)
 
     def add_waiting_set_stage(
-        self, positions: list[tuple[float, float]]
+        self, positions: list[tuple[float, float]], z_hint: float = 0.0
     ) -> int:
         """Add a new waiting set stage to this simulation.
 
@@ -261,11 +271,15 @@ class Simulation:
             positions: Ordered list of the waiting points of this waiting set.
                 The agents will fill the waiting points in the given order. If more agents
                 are targeting the waiting, the remaining will wait at the last given point.
+            z_hint: On multi-level (mesh) geometry, the approximate height of
+                the stage. Each slot anchors on the surface sheet whose height
+                there is within 0.25 m of the hint; without a match it raises.
+                Leave at 0.0 for single-level geometry.
 
         Returns:
             Id of the new stage.
         """
-        return self._obj.add_waiting_set_stage(positions)
+        return self._obj.add_waiting_set_stage(positions, z_hint)
 
     def add_exit_stage(
         self,
@@ -277,6 +291,7 @@ class Simulation:
             | shapely.MultiPoint
             | list[tuple[float, float]]
         ),
+        z_hint: float = 0.0,
     ) -> int:
         """Add an exit stage to the simulation.
 
@@ -295,13 +310,17 @@ class Simulation:
                 * :class:`~shapely.MultiPoint` forming a "simple" polygon when points are interpreted as linear ring without repetition of the start/end point.
 
                 * str with a valid Well Known Text. In this format the same WKT types as mentioned for the shapely types are supported: GEOMETRYCOLLETION, MULTIPOLYGON, POLYGON, MULTIPOINT. The same restrictions as mentioned for the shapely types apply.
+            z_hint: On multi-level (mesh) geometry, the approximate height of
+                the exit. The exit anchors on the surface sheet whose height at
+                the polygon's centroid is within 0.25 m of the hint; without a
+                match it raises. Leave at 0.0 for single-level geometry.
 
         Returns:
             Id of the added exit stage.
 
         """
         exit_geometry = build_geometry(polygon)
-        return self._obj.add_exit_stage(exit_geometry.boundary())
+        return self._obj.add_exit_stage(exit_geometry.boundary(), z_hint)
 
     def add_direct_steering_stage(self) -> int:
         """Add an direct steering stage to the simulation.
@@ -345,6 +364,7 @@ class Simulation:
             | WarpDriverModelAgentParameters
             | CustomModelAgentParameters
         ),
+        z_hint: float = 0.0,
     ) -> int:
         """Add an agent to the simulation.
 
@@ -352,6 +372,10 @@ class Simulation:
                 parameters: Agent Parameters of the newly added model. The parameters have to
                     match the model used in this simulation. When adding agents with invalid parameters,
                     or too close to the boundary or other agents, this will cause an error.
+                z_hint: On multi-level (mesh) geometry, the approximate height
+                    of the agent. It anchors on the surface sheet whose height
+                    at its position is within 0.25 m of the hint; without a
+                    match it raises. Leave at 0.0 for single-level geometry.
 
             Returns:
                 Id of the added agent.
@@ -446,7 +470,7 @@ class Simulation:
                 position=parameters.model.position,
                 model=py_jps._CustomModelData(parameters.model),
             )
-            return self._obj.add_agent(agent)
+            return self._obj.add_agent(agent, z_hint)
 
         agent = py_jps.Agent(
             journey_id=parameters.journey_id,
@@ -454,7 +478,7 @@ class Simulation:
             position=parameters.position,
             model=model,
         )
-        return self._obj.add_agent(agent)
+        return self._obj.add_agent(agent, z_hint)
 
     def mark_agent_for_removal(self, agent_id: int):
         """Marks an agent for removal.

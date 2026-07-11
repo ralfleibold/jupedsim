@@ -109,24 +109,45 @@ void init_simulation(py::module_& m)
             py::arg("run_in_2d") = false)
         .def(
             "add_waypoint_stage",
-            [](Simulation& sim, std::tuple<double, double> position, double distance) {
-                return sim.AddStage(WaypointDescription{intoPoint(position), distance}).getID();
-            })
+            [](Simulation& sim,
+               std::tuple<double, double> position,
+               double distance,
+               double z_hint) {
+                return sim.AddStage(WaypointDescription{intoPoint(position), distance}, z_hint)
+                    .getID();
+            },
+            py::arg("position"),
+            py::arg("distance"),
+            py::arg("z_hint") = 0.0)
         .def(
             "add_queue_stage",
-            [](Simulation& sim, const std::vector<std::tuple<double, double>>& positions) {
-                return sim.AddStage(NotifiableQueueDescription{intoPoints(positions)}).getID();
-            })
+            [](Simulation& sim,
+               const std::vector<std::tuple<double, double>>& positions,
+               double z_hint) {
+                return sim.AddStage(NotifiableQueueDescription{intoPoints(positions)}, z_hint)
+                    .getID();
+            },
+            py::arg("positions"),
+            py::arg("z_hint") = 0.0)
         .def(
             "add_waiting_set_stage",
-            [](Simulation& sim, const std::vector<std::tuple<double, double>>& positions) {
-                return sim.AddStage(NotifiableWaitingSetDescription{intoPoints(positions)}).getID();
-            })
+            [](Simulation& sim,
+               const std::vector<std::tuple<double, double>>& positions,
+               double z_hint) {
+                return sim.AddStage(NotifiableWaitingSetDescription{intoPoints(positions)}, z_hint)
+                    .getID();
+            },
+            py::arg("positions"),
+            py::arg("z_hint") = 0.0)
         .def(
             "add_exit_stage",
-            [](Simulation& sim, const std::vector<std::tuple<double, double>>& polygon) {
-                return sim.AddStage(ExitDescription{Polygon{intoPoints(polygon)}}).getID();
-            })
+            [](Simulation& sim,
+               const std::vector<std::tuple<double, double>>& polygon,
+               double z_hint) {
+                return sim.AddStage(ExitDescription{Polygon{intoPoints(polygon)}}, z_hint).getID();
+            },
+            py::arg("polygon"),
+            py::arg("z_hint") = 0.0)
         .def(
             "add_direct_steering_stage",
             [](Simulation& sim) { return sim.AddStage(DirectSteeringDescription{}).getID(); })
@@ -142,7 +163,11 @@ void init_simulation(py::module_& m)
             })
         .def(
             "add_agent",
-            [](Simulation& sim, GenericAgent& agent) { return sim.AddAgent(agent).getID(); })
+            [](Simulation& sim, GenericAgent& agent, double z_hint) {
+                return sim.AddAgent(agent, z_hint).getID();
+            },
+            py::arg("agent"),
+            py::arg("z_hint") = 0.0)
         .def(
             "mark_agent_for_removal",
             [](Simulation& sim, uint64_t id) { sim.MarkAgentForRemoval(id); })

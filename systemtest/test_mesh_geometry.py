@@ -91,3 +91,47 @@ def test_unreadable_obj_file_reports_the_path(tmp_path):
             model=jps.CollisionFreeSpeedModel(),
             geometry=path,
         )
+
+
+def test_z_hint_selects_the_floor_for_agent_and_exit(two_storey_obj):
+    """From Python, z_hint anchors the stage and the agent on the upper
+    floor: an agent placed above the ground floor evacuates through an exit
+    that overlaps the ground in (x,y) but is anchored one storey up."""
+    sim = jps.Simulation(
+        model=jps.CollisionFreeSpeedModel(),
+        geometry=two_storey_obj,
+    )
+    # Exit footprint (x in [7,9], y in [0,2]) sits over both floors; the
+    # z_hint pins it to the upper storey at z=3.
+    exit_id = sim.add_exit_stage([(7, 0), (9, 0), (9, 2), (7, 2)], z_hint=3.0)
+    journey_id = sim.add_journey(jps.JourneyDescription([exit_id]))
+    sim.add_agent(
+        jps.CollisionFreeSpeedModelAgentParameters(
+            journey_id=journey_id, stage_id=exit_id, position=(8, 8)
+        ),
+        z_hint=3.0,
+    )
+
+    for _ in range(2000):
+        if sim.agent_count() == 0:
+            break
+        sim.iterate()
+    assert sim.agent_count() == 0
+
+
+def test_z_hint_without_a_matching_sheet_raises(two_storey_obj):
+    sim = jps.Simulation(
+        model=jps.CollisionFreeSpeedModel(),
+        geometry=two_storey_obj,
+    )
+    # (8,1) has sheets at z=0 and z=3; a hint of 1.5 matches neither within
+    # the 0.25 m tolerance.
+    exit_id = sim.add_exit_stage([(0, 0), (2, 0), (2, 2), (0, 2)])
+    journey_id = sim.add_journey(jps.JourneyDescription([exit_id]))
+    with pytest.raises(RuntimeError, match=r"not inside walkable area"):
+        sim.add_agent(
+            jps.CollisionFreeSpeedModelAgentParameters(
+                journey_id=journey_id, stage_id=exit_id, position=(8, 1)
+            ),
+            z_hint=1.5,
+        )
