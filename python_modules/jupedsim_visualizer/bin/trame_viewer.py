@@ -50,6 +50,9 @@ def build_app(obj_path: str | None):
     plotter = pv.Plotter()
     plotter.set_background("white")
     plotter.enable_parallel_projection()
+    # Terrain-style interaction: keeps +z as a fixed "up" (no roll / flipping upside down), which
+    # matches a floor-plan / multi-level building far better than the default trackball.
+    plotter.enable_terrain_style(mouse_wheel_zooms=True, shift_pans=True)
 
     server = get_server(client_type="vue3")
     state, ctrl = server.state, server.controller

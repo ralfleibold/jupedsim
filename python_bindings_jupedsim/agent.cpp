@@ -45,5 +45,6 @@ void init_agent(py::module_& m)
         .def_property_readonly(
             "model",
             [](GenericAgent& agent) -> auto& { return agent.model; },
-            py::return_value_policy::reference);
+            py::return_value_policy::reference)
+        .def_property_readonly("z", [](const GenericAgent& agent) { return agent.z; });
 }
