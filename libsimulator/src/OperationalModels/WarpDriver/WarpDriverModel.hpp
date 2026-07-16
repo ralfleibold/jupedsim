@@ -2,8 +2,6 @@
 #pragma once
 
 #include "OperationalModel.hpp"
-
-class EnvironmentQuery;
 #include "OperationalModelType.hpp"
 #include "Point.hpp"
 
@@ -13,6 +11,8 @@ class EnvironmentQuery;
 #include <random>
 #include <utility>
 #include <vector>
+
+class EnvironmentQuery;
 
 class WarpDriverModel : public OperationalModel
 {

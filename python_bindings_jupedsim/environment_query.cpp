@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-#include "CollisionGeometry.hpp"
 #include "EnvironmentQuery.hpp"
 #include "GenericAgent.hpp"
 #include "LineSegment.hpp"

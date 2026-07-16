@@ -2,14 +2,13 @@
 #pragma once
 
 #include "OperationalModelType.hpp"
-
-class EnvironmentQuery;
 #include "SimulationError.hpp"
 
 #include <fmt/core.h>
 
 #include <string>
 
+class EnvironmentQuery;
 struct GenericAgent;
 
 template <typename T>

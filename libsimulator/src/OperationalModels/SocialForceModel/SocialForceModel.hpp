@@ -2,13 +2,13 @@
 #pragma once
 
 #include "LineSegment.hpp"
-
-class EnvironmentQuery;
 #include "OperationalModel.hpp"
 #include "OperationalModelType.hpp"
 #include "Point.hpp"
 
 #include <fmt/core.h>
+
+class EnvironmentQuery;
 
 class SocialForceModel : public OperationalModel
 {

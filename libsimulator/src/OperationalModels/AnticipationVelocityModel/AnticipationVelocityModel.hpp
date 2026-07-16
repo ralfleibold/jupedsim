@@ -2,7 +2,6 @@
 #pragma once
 
 #include "LineSegment.hpp"
-class EnvironmentQuery;
 #include "OperationalModel.hpp"
 #include "OperationalModelType.hpp"
 #include "Point.hpp"
@@ -12,6 +11,8 @@ class EnvironmentQuery;
 #include <cstdint>
 #include <random>
 #include <vector>
+
+class EnvironmentQuery;
 
 class AnticipationVelocityModel : public OperationalModel
 {
