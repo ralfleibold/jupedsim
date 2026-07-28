@@ -17,7 +17,6 @@
 
 #include <fmt/core.h>
 
-#include <concepts>
 #include <deque>
 #include <optional>
 #include <utility>
@@ -25,28 +24,14 @@
 class Journey;
 class BaseStage;
 
-/// Agent position is owned by the per-model agent state. Every alternative of
-/// GenericAgent::ModelState must satisfy this concept; the framework accesses the
-/// position type-erased through GenericAgent::position().
-template <typename T>
-concept ModelAgentState = requires(T t) {
-    // position() hands out mutable Point& into the state, so a convertible or const member
-    // is not enough.
-    { t.position } -> std::same_as<Point&>;
-};
-
-template <typename Variant>
-inline constexpr bool EachAlternativeIsModelAgentState = false;
-template <typename... Ts>
-inline constexpr bool EachAlternativeIsModelAgentState<std::variant<Ts...>> =
-    (ModelAgentState<Ts> && ...);
-
 struct GenericAgent {
     using ID = jps::UniqueID<GenericAgent>;
     ID id{};
 
     jps::UniqueID<Journey> journeyId{jps::UniqueID<Journey>::Invalid};
     jps::UniqueID<BaseStage> stageId{jps::UniqueID<BaseStage>::Invalid};
+
+    Point position{};
 
     // This is evaluated by the "operational level"
     Point nextTarget{};
@@ -61,48 +46,27 @@ struct GenericAgent {
         SocialForceModel::State,
         WarpDriverModel::State,
         CustomModel::State>;
-    static_assert(
-        EachAlternativeIsModelAgentState<ModelState>,
-        "Every agent model state must provide a 'Point position' member");
     ModelState model{};
 
     /// The agent's on-surface Location (optional during the 2D->3D migration).
-    /// Invariant: `location->xy() == position()` after every pipeline stage.
+    /// Invariant: `location->xy() == position` after every pipeline stage.
     std::optional<Location> location{};
-
-    Point& position()
-    {
-        return std::visit([](auto& m) -> Point& { return m.position; }, model);
-    }
-    const Point& position() const
-    {
-        return std::visit([](const auto& m) -> const Point& { return m.position; }, model);
-    }
 
     GenericAgent(
         ID id_,
         jps::UniqueID<Journey> journeyId_,
         jps::UniqueID<BaseStage> stageId_,
+        Point position_,
         ModelState model_)
         : id(id_ != ID::Invalid ? id_ : ID{})
         , journeyId(journeyId_)
         , stageId(stageId_)
+        , position(position_)
+        , finalTarget(position_)
         , model(std::move(model_))
     {
-        // Position is owned by the model state; seed the initial waypoint from it.
-        finalTarget = position();
     }
 };
-
-inline const Point& Pos(const GenericAgent::ModelState& state)
-{
-    return std::visit([](const auto& s) -> const Point& { return s.position; }, state);
-}
-
-inline Point& Pos(GenericAgent::ModelState& state)
-{
-    return std::visit([](auto& s) -> Point& { return s.position; }, state);
-}
 
 /// Maps agent model data to the operational model type it belongs to. Kept
 /// exhaustive on purpose: adding a model type will not compile until the
@@ -153,7 +117,7 @@ struct fmt::formatter<GenericAgent> {
                     agent.stageId,
                     agent.nextTarget,
                     agent.finalTarget,
-                    agent.position(),
+                    agent.position,
                     m);
             },
             agent.model);

@@ -32,17 +32,19 @@ public:
     };
 
     // Returns all agents within 'radius' of 'agent', excluding 'agent' itself.
-    // An optional predicate 'filter' further filters the result; it receives the
-    // position for which neighbors are returned as well as the candidates. Example:
-    //   query.AgentsInRange(state, r, [&envQuery, from=model.position](const Point& to) {
+    // An optional predicate 'filter' further filters the result; it is never called
+    // with 'agent'. Example:
+    //   query.OtherAgentsInRange(agent, r, [&envQuery, from = agent.position](const Point& to) {
     //   return envQuery.NoGeometryBetween(from, to);})
     template <std::predicate<const Point&> Pred = AcceptAll>
     std::vector<GenericAgent>
-    OtherAgentsInRange(const OperationalModelState& state, double radius, Pred filter = {}) const
+    OtherAgentsInRange(const GenericAgent& agent, double radius, Pred filter = {}) const
     {
-        Point from = Pos(state);
-        return AgentsInRange(
-            from, radius, [&from, &filter](const Point& to) { return from != to && filter(to); });
+        auto neighbors = _nsearch.GetNeighboringAgents(agent.position, radius);
+        std::erase_if(neighbors, [&](const GenericAgent& candidate) {
+            return candidate.id == agent.id || !filter(candidate.position);
+        });
+        return neighbors;
     }
 
     template <std::predicate<const Point&> Pred = AcceptAll>
@@ -50,9 +52,8 @@ public:
     AgentsInRange(const Point& from, double radius, Pred filter = {}) const
     {
         auto neighbors = _nsearch.GetNeighboringAgents(from, radius);
-        std::erase_if(neighbors, [&](const GenericAgent& candidate) {
-            return !filter(candidate.position());
-        });
+        std::erase_if(
+            neighbors, [&](const GenericAgent& candidate) { return !filter(candidate.position); });
         return neighbors;
     }
 

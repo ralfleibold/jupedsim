@@ -26,7 +26,7 @@ void init_agent(py::module_& m)
         .def_property_readonly(
             "stage_id", [](const GenericAgent& agent) { return agent.stageId.getID(); })
         .def_property_readonly(
-            "position", [](const GenericAgent& agent) { return intoTuple(agent.position()); })
+            "position", [](const GenericAgent& agent) { return intoTuple(agent.position); })
         .def_property(
             "final_target",
             [](const GenericAgent& agent) { return intoTuple(agent.finalTarget); },

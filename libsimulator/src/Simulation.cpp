@@ -247,8 +247,8 @@ GenericAgent::ID Simulation::AddAgent(GenericAgent agent)
 {
     ThrowIfIterating("AddAgent");
     JPS_SCOPED_TIMER_AND_TRACE(_timer, "Add Agent", Detailed);
-    if(!_geometry->geometry_2d()->InsideGeometry(agent.position())) {
-        throw SimulationError("Agent {} not inside walkable area", agent.position());
+    if(!_geometry->geometry_2d()->InsideGeometry(agent.position)) {
+        throw SimulationError("Agent {} not inside walkable area", agent.position);
     }
     if(_journeys.count(agent.journeyId) == 0) {
         throw SimulationError("Unknown journey id: {}", agent.journeyId);
@@ -269,7 +269,7 @@ GenericAgent::ID Simulation::AddAgent(GenericAgent agent)
 
     // Set 3D location (with fixed z=0.0 for the time being), so that the OperationDecisionSystem
     // will run through both the original + the 3D move. (This is temporary.)
-    agent.location = _geometry->get_location(agent.position().x, agent.position().y, 0.0);
+    agent.location = _geometry->get_location(agent.position.x, agent.position.y, 0.0);
 
     _operationalDecisionSystem.ValidateAgent(agent, _neighborhoodSearch, *_geometry->geometry_2d());
 
@@ -398,7 +398,7 @@ std::vector<GenericAgent::ID> Simulation::AgentsInPolygon(const std::vector<Poin
     result.reserve(candidates.size());
     std::for_each(
         std::begin(candidates), std::end(candidates), [&result, &poly](const auto& agent) {
-            if(poly.IsInside(agent.position())) {
+            if(poly.IsInside(agent.position)) {
                 result.push_back(agent.id);
             }
         });

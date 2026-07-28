@@ -61,6 +61,20 @@ _STATE_TYPES = (
 )
 
 
+def _positions_contradict(position, state_position) -> bool:
+    """True when both are usable ``(x, y)`` pairs and they differ.
+
+    Anything not comparable as a coordinate pair is passed through: type
+    validation belongs to the simulation, which reports it with context.
+    """
+    try:
+        given = (float(position[0]), float(position[1]))
+        in_state = (float(state_position[0]), float(state_position[1]))
+    except (TypeError, ValueError, IndexError, KeyError):
+        return False
+    return given != in_state
+
+
 class Simulation:
     """Defines a simulation of pedestrian movement over a continuous walkable area.
 
@@ -270,6 +284,7 @@ class Simulation:
         *,
         journey_id: int,
         stage_id: int,
+        position: tuple[float, float],
         state: (
             GeneralizedCentrifugalForceModelState
             | CollisionFreeSpeedModelState
@@ -283,32 +298,45 @@ class Simulation:
     ) -> int:
         """Add an agent to the simulation.
 
-        The agent is spawned at ``state.position``.
-
         Arguments:
             journey_id: Id of the journey the agent follows.
             stage_id: Id of the stage the agent initially targets.
+            position: Position to spawn the agent at, as ``(x, y)`` in metres.
+                The position belongs to the agent, not to its model state.
             state: Initial per-agent model state. For built-in models this is
                 the matching ``XModelState`` instance, e.g.
                 :class:`~jupedsim.CollisionFreeSpeedModelState`. For custom
                 models this is your own object satisfying
                 :class:`~jupedsim.CustomModelAgentState`, i.e. exposing a
-                ``position`` attribute. The state type has to match the model
-                used in this simulation. When adding agents with invalid
-                parameters, or too close to the boundary or other agents, this
-                will cause an error.
+                ``position`` attribute that the model updates each step. The
+                state type has to match the model used in this simulation. When
+                adding agents with invalid parameters, or too close to the
+                boundary or other agents, this will cause an error.
 
         Returns:
             Id of the added agent.
         """
         if isinstance(state, _STATE_TYPES):
             return self._obj.add_agent(
-                journey_id=journey_id, stage_id=stage_id, state=state
+                journey_id=journey_id,
+                stage_id=stage_id,
+                position=position,
+                state=state,
             )
         if isinstance(state, CustomModelAgentState):
+            # Temporary Check for consistency. Right now Python model states still
+            # need a 'position' attribute. This will be removed later during
+            # refactoring.
+            if _positions_contradict(position, state.position):
+                raise ValueError(
+                    f"Conflicting spawn positions: add_agent(position={tuple(position)}) "
+                    f"but state.position is {tuple(state.position)}. The agent spawns at "
+                    "the position given to add_agent; make the state agree with it."
+                )
             return self._obj.add_agent(
                 journey_id=journey_id,
                 stage_id=stage_id,
+                position=position,
                 state=py_jps._CustomModelState(state),
             )
         raise TypeError(

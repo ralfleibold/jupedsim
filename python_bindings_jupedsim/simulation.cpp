@@ -33,14 +33,13 @@ void init_simulation(py::module_& m)
             // The model is moved out of the Python object into Simulation. After this constructor
             // returns, the Python model object passed here is disowned/invalid and must not be
             // reused.
-            py::init(
-                [](std::unique_ptr<OperationalModel> model, Geometry2D geometry, double dT) {
-                    if(!model) {
-                        throw std::invalid_argument("model must not be None");
-                    }
-                    return std::make_unique<Simulation>(
-                        std::move(model), std::make_unique<Geometry2D>(geometry), dT);
-                }),
+            py::init([](std::unique_ptr<OperationalModel> model, Geometry2D geometry, double dT) {
+                if(!model) {
+                    throw std::invalid_argument("model must not be None");
+                }
+                return std::make_unique<Simulation>(
+                    std::move(model), std::make_unique<Geometry2D>(geometry), dT);
+            }),
             py::kw_only(),
             py::arg("model"),
             py::arg("geometry"),
@@ -83,15 +82,21 @@ void init_simulation(py::module_& m)
             [](Simulation& sim,
                uint64_t journeyId,
                uint64_t stageId,
+               std::tuple<double, double> position,
                GenericAgent::ModelState state) {
                 return sim
                     .AddAgent(GenericAgent(
-                        GenericAgent::ID::Invalid, journeyId, stageId, std::move(state)))
+                        GenericAgent::ID::Invalid,
+                        journeyId,
+                        stageId,
+                        intoPoint(position),
+                        std::move(state)))
                     .getID();
             },
             py::kw_only(),
             py::arg("journey_id"),
             py::arg("stage_id"),
+            py::arg("position"),
             py::arg("state"))
         .def(
             "mark_agent_for_removal",

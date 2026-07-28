@@ -29,8 +29,7 @@ public:
         const EnvironmentQuery&) const override
     {
         const auto& cur = std::get<CustomModel::State>(current.model);
-        auto& nxt = std::get<CustomModel::State>(next.model);
-        nxt.position = cur.position + cur.Get<ConstantVelocity>().velocity * dT;
+        next.position = current.position + cur.Get<ConstantVelocity>().velocity * dT;
     }
 
     void CheckModelConstraint(const GenericAgent&, const EnvironmentQuery&) const override {}
@@ -38,13 +37,12 @@ public:
 
 GenericAgent make_agent(Point start, Point velocity)
 {
-    auto agent = GenericAgent(
+    return GenericAgent(
         GenericAgent::ID::Invalid,
         jps::UniqueID<Journey>::Invalid,
         jps::UniqueID<BaseStage>::Invalid,
+        start,
         CustomModel::State{ConstantVelocity{velocity}});
-    agent.position() = start;
-    return agent;
 }
 
 /// A flat square [-10,10]^2 with its 3D twin over the same polygon.
@@ -76,10 +74,10 @@ TEST(OperationalDecisionSystemReAnchor, LocationTracksPositionOnFlatGeometry)
     ASSERT_TRUE(agent.location.has_value());
     // Check invariant: the Location's (x,y) equals the model position.
     // velocity=2.0, dt=0.5 --> move x by 1.0
-    EXPECT_NEAR(agent.location->xy().x, agent.position().x, 1e-9);
-    EXPECT_NEAR(agent.location->xy().y, agent.position().y, 1e-9);
-    EXPECT_NEAR(agent.position().x, start.x + 1.0, 1e-9);
-    EXPECT_NEAR(agent.position().y, start.y, 1e-9);
+    EXPECT_NEAR(agent.location->xy().x, agent.position.x, 1e-9);
+    EXPECT_NEAR(agent.location->xy().y, agent.position.y, 1e-9);
+    EXPECT_NEAR(agent.position.x, start.x + 1.0, 1e-9);
+    EXPECT_NEAR(agent.position.y, start.y, 1e-9);
     EXPECT_NEAR(agent.location->z(), 0.0, 1e-9);
     EXPECT_EQ(agent.location->region(), 0u);
 }
@@ -105,14 +103,14 @@ TEST(OperationalDecisionSystemReAnchor, InvariantHoldsOverManySteps)
         system.Run(dT, 0.0, neighborhoodSearch, *geo->geometry_2d(), agents);
         const auto& agent = agents.front();
         ASSERT_TRUE(agent.location.has_value());
-        EXPECT_NEAR(agent.location->xy().x, agent.position().x, 1e-9);
-        EXPECT_NEAR(agent.location->xy().y, agent.position().y, 1e-9);
+        EXPECT_NEAR(agent.location->xy().x, agent.position.x, 1e-9);
+        EXPECT_NEAR(agent.location->xy().y, agent.position.y, 1e-9);
         EXPECT_NEAR(agent.location->z(), 0.0, 1e-9);
         EXPECT_EQ(agent.location->region(), 0u);
     }
     // After `steps` steps the agent advanced by velocity * dT * steps.
-    EXPECT_NEAR(agents.front().position().x, start.x + velocity.x * dT * steps, 1e-9);
-    EXPECT_NEAR(agents.front().position().y, start.y + velocity.y * dT * steps, 1e-9);
+    EXPECT_NEAR(agents.front().position.x, start.x + velocity.x * dT * steps, 1e-9);
+    EXPECT_NEAR(agents.front().position.y, start.y + velocity.y * dT * steps, 1e-9);
 }
 
 TEST(OperationalDecisionSystemReAnchor, AgentWithoutLocationIsUnaffected)
@@ -133,5 +131,5 @@ TEST(OperationalDecisionSystemReAnchor, AgentWithoutLocationIsUnaffected)
 
     const auto& agent = agents.front();
     EXPECT_FALSE(agent.location.has_value());
-    EXPECT_EQ(agent.position(), start + velocity * dT);
+    EXPECT_EQ(agent.position, start + velocity * dT);
 }

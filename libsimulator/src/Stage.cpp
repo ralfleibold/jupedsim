@@ -88,7 +88,7 @@ Waypoint::Waypoint(Point position_, double distance_) : position(position_), dis
 
 bool Waypoint::IsCompleted(const GenericAgent& agent)
 {
-    const auto actual_distance = (agent.position() - position).Norm();
+    const auto actual_distance = (agent.position - position).Norm();
     return actual_distance <= distance;
 }
 
@@ -115,7 +115,7 @@ Exit::Exit(Polygon area_, std::vector<GenericAgent::ID>& toRemove_)
 
 bool Exit::IsCompleted(const GenericAgent& agent)
 {
-    const bool hasReachedExit = area.IsInside(agent.position());
+    const bool hasReachedExit = area.IsInside(agent.position);
     if(hasReachedExit) {
         toRemove.push_back(agent.id);
     }
@@ -149,7 +149,7 @@ bool NotifiableWaitingSet::IsCompleted(const GenericAgent& agent)
     if(find_iter != std::end(occupants)) {
         return true;
     }
-    const auto distance = (agent.position() - slots[0]).Norm();
+    const auto distance = (agent.position - slots[0]).Norm();
     return distance <= 1;
 }
 
@@ -217,7 +217,7 @@ void NotifiableWaitingSet::Update(const EnvironmentQuery& envQuery)
             if(agent.stageId == id) {
                 if(std::find(std::begin(occupants), std::end(occupants), agent.id) ==
                    std::end(occupants)) {
-                    const auto distance = (agent.position() - slots[index]).Norm();
+                    const auto distance = (agent.position - slots[index]).Norm();
                     if(distance < min_distance) {
                         min_distance = distance;
                         occupant = agent.id;
@@ -300,7 +300,7 @@ void NotifiableQueue::Update(const EnvironmentQuery& envQuery)
                exitingThisUpdate.contains(agent.id)) {
                 continue;
             }
-            const auto distance = (agent.position() - slots[index]).Norm();
+            const auto distance = (agent.position - slots[index]).Norm();
             if(distance < min_distance) {
                 min_distance = distance;
                 occupant = agent.id;

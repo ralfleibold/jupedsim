@@ -17,12 +17,12 @@ using State = CollisionFreeSpeedModel::State;
 GenericAgent MakeAgent(Point pos, double radius = 0.2)
 {
     State s{};
-    s.position = pos;
     s.radius = radius;
     return GenericAgent(
         GenericAgent::ID::Invalid,
         jps::UniqueID<Journey>::Invalid,
         jps::UniqueID<BaseStage>::Invalid,
+        pos,
         std::move(s));
 }
 
@@ -110,7 +110,7 @@ TEST(EnvironmentQuery, AgentsInRangeCustomFilterSelectsSubset)
 
     ASSERT_EQ(result.size(), 2u);
     for(const auto& neighbor : result) {
-        EXPECT_GE(std::get<State>(neighbor.model).position.x, 0.0);
+        EXPECT_GE(neighbor.position.x, 0.0);
     }
 }
 
@@ -123,12 +123,12 @@ TEST(EnvironmentQuery, NoGeometryBetweenFiltersOccludedAgents)
     const auto geo = WalledGeometry();
     const auto q = env.query(geo);
 
-    const auto from = env.agents[0].position();
+    const auto from = env.agents[0].position;
     const auto result = q.OtherAgentsInRange(
         env.agents[0], 5.0, [&](const Point& to) { return q.NoGeometryBetween(from, to); });
 
     ASSERT_EQ(result.size(), 1u);
-    EXPECT_EQ(std::get<State>(result[0].model).position, Point(0, 1));
+    EXPECT_EQ(result[0].position, Point(0, 1));
 }
 
 TEST(EnvironmentQuery, AgentsInRangeCustomFilterReceivesNoSelf)
@@ -140,7 +140,7 @@ TEST(EnvironmentQuery, AgentsInRangeCustomFilterReceivesNoSelf)
     const auto geo = OpenGeometry();
     const auto q = env.query(geo);
 
-    const auto selfPos = env.agents[0].position();
+    const auto selfPos = env.agents[0].position;
     q.OtherAgentsInRange(env.agents[0], 5.0, [&](const Point& to) {
         if(to == selfPos) {
             ADD_FAILURE() << "filter was called with the querying agent's own position";
@@ -159,4 +159,35 @@ TEST(EnvironmentQuery, AgentsInRangeOutOfRadiusNotReturned)
 
     const auto result = q.OtherAgentsInRange(env.agents[0], 1.0, [](const Point&) { return true; });
     EXPECT_TRUE(result.empty());
+}
+
+TEST(EnvironmentQuery, AgentsOnTheSamePositionSeeEachOther)
+{
+    Environment env{};
+    env.add_agent({3, 4});
+    env.add_agent({3, 4});
+    const auto geo = OpenGeometry();
+    const auto q = env.query(geo);
+
+    const auto result = q.OtherAgentsInRange(env.agents[0], 1.0);
+
+    ASSERT_EQ(result.size(), 1u);
+    EXPECT_EQ(result[0].id, env.agents[1].id);
+}
+
+// Every other test here queries from {0,0} and would not notice a centre that
+// silently defaults to the origin.
+TEST(EnvironmentQuery, AgentsInRangeCentresOnTheQueryingAgentNotTheOrigin)
+{
+    Environment env{};
+    env.add_agent({50, 30}); // querying agent, deliberately away from the origin
+    env.add_agent({51, 30}); // its actual neighbor
+    env.add_agent({0.5, 0}); // decoy next to the origin
+    const auto geo = OpenGeometry();
+    const auto q = env.query(geo);
+
+    const auto result = q.OtherAgentsInRange(env.agents[0], 2.0);
+
+    ASSERT_EQ(result.size(), 1u);
+    EXPECT_EQ(result[0].position, Point(51, 30));
 }

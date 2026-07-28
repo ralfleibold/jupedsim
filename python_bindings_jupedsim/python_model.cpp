@@ -121,9 +121,7 @@ void PythonModel::ComputeNextState(
     }
 
     try {
-        // Sync the GIL-free position cache from the returned Python state so the
-        // framework can read the agent position without acquiring the GIL.
-        nextModelData.position = intoPoint(py::cast<std::tuple<double, double>>(attr));
+        next.position = intoPoint(py::cast<std::tuple<double, double>>(attr));
     } catch(const py::cast_error&) {
         // Diagnostics run Python code on the offending object; they must not
         // be able to replace the error they describe.
@@ -165,13 +163,7 @@ void init_python_model(py::module_& m)
 
     py::class_<CustomModel::State>(m, "_CustomModelState")
         .def(py::init([](py::object model) {
-            // Prime the GIL-free position cache from the wrapped state so the
-            // framework can spawn the agent at the state's position.
-            const auto position =
-                intoPoint(py::cast<std::tuple<double, double>>(model.attr("position")));
-            CustomModel::State data{GilSafePyObject{std::move(model)}};
-            data.position = position;
-            return data;
+            return CustomModel::State{GilSafePyObject{std::move(model)}};
         }))
         .def_property_readonly(
             "model", [](CustomModel::State& data) { return data.Get<GilSafePyObject>().Get(); });

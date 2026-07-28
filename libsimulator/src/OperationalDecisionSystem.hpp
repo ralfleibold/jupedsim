@@ -49,7 +49,7 @@ public:
                 // Advance the Location by the model's xy change.
                 // Basically we redo the walk on 3D mesh. This will get the real movement later,
                 // so that this part gets removed.
-                next.location->move_on_surface(next.position() - before);
+                next.location->move_on_surface(next.position - before);
             }
         }
         // Swap in the computed generation. This is safe because no caller retains

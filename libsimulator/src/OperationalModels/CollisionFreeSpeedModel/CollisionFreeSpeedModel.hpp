@@ -15,7 +15,6 @@ class CollisionFreeSpeedModel : public OperationalModel
 public:
     /// Per-agent state of the collision free speed model.
     struct State {
-        Point position{};
         Point orientation{0.0, 0.0};
         double timeGap{1};
         double v0{1.2};

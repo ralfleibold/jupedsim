@@ -15,7 +15,6 @@ class CollisionFreeSpeedModelV3 : public OperationalModel
 public:
     /// Per-agent state of the collision free speed model v3.
     struct State {
-        Point position{};
         Point orientation{1.0, 0.0};
         double strengthNeighborRepulsion{8.0}; // [rad] max steering authority before upper bound
         double rangeNeighborRepulsion{0.1}; // [m] base interaction range for neighbor influence

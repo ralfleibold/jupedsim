@@ -430,12 +430,12 @@ void WarpDriverModel::ComputeNextState(
     }
 
     // Direction towards destination
-    Point toTarget = current.nextTarget - agentData.position;
+    Point toTarget = current.nextTarget - current.position;
     const double distToTarget = toTarget.Norm();
     if(distToTarget < 1e-9) {
         // The old update carried default-initialized stuck/detour state here,
         // so applying it reset that state; replicate that reset.
-        nextData.position = agentData.position;
+        next.position = current.position;
         nextData.orientation = orient;
         nextData.stuckTime = 0.0;
         nextData.anchorX = 0.0;
@@ -454,7 +454,7 @@ void WarpDriverModel::ComputeNextState(
     const double dtSample = this->_timeHorizon / std::max(this->_numSamples - 1, 1);
 
     // === Step 2: Perceive - build collision probability field ===
-    const auto neighbors = envQuery.OtherAgentsInRange(current.model, _cutOffRadius);
+    const auto neighbors = envQuery.OtherAgentsInRange(current, _cutOffRadius);
 
     // Short-range repulsion: not part of the original Wolinski et al. (2016)
     // model, which is purely anticipatory. Added as a practical safety net
@@ -467,7 +467,7 @@ void WarpDriverModel::ComputeNextState(
         if(!nbData) {
             continue;
         }
-        Point diff = agentData.position - nbData->position;
+        Point diff = current.position - neighbor.position;
         const double dist = diff.Norm();
         const double combinedRadius = agentData.radius + nbData->radius;
         if(dist < combinedRadius * 3.0 && dist > 1e-6) {
@@ -521,9 +521,9 @@ void WarpDriverModel::ComputeNextState(
         // gradient inverse) are loop-invariant w.r.t. the sample index. Hoist
         // them out of the sample loop and precompute once per (ped, neighbor).
         WarpParams wp{};
-        wp.posA = agentData.position;
+        wp.posA = current.position;
         wp.orientA = effectiveOrient;
-        wp.posB = nbData->position;
+        wp.posB = neighbor.position;
         wp.orientB = nbOrient;
         wp.speedB = nbSpeed;
         wp.radiusB = agentData.radius + nbData->radius; // Minkowski sum
@@ -627,17 +627,17 @@ void WarpDriverModel::ComputeNextState(
     newVelWorld = newVelWorld + repulsion;
 
     // Boundary avoidance: steer agents away from walls
-    const auto& walls = envQuery.LineSegmentsInRange(agentData.position);
+    const auto& walls = envQuery.LineSegmentsInRange(current.position);
     for(const auto& wall : walls) {
         const Point wallVec = wall.p2 - wall.p1;
         const double wallLen2 = wallVec.ScalarProduct(wallVec);
         if(wallLen2 < 1e-12) {
             continue; // degenerate wall segment
         }
-        const Point toAgent = agentData.position - wall.p1;
+        const Point toAgent = current.position - wall.p1;
         const double t = std::clamp(toAgent.ScalarProduct(wallVec) / wallLen2, 0.0, 1.0);
         const Point closest = wall.p1 + wallVec * t;
-        const Point diff = agentData.position - closest;
+        const Point diff = current.position - closest;
         const double dist = diff.Norm();
         if(dist < agentData.radius * 3.0 && dist > 1e-6) {
             const double steering = agentData.v0 * (agentData.radius * 3.0 - dist) / dist;
@@ -667,17 +667,17 @@ void WarpDriverModel::ComputeNextState(
         Point lateral{-desiredDir.y * detourSide, desiredDir.x * detourSide};
         Point detourDir = (lateral * 0.8 + desiredDir * 0.2).Normalized();
         Point detourVel = detourDir * agentData.v0 * 0.5;
-        Point newPos = agentData.position + detourVel * dT;
+        Point newPos = current.position + detourVel * dT;
         // If detour would leave the walkable area, try the other side
         if(!envQuery.InsideGeometry(newPos)) {
             detourSide = -detourSide;
             lateral = Point{-desiredDir.y * detourSide, desiredDir.x * detourSide};
             detourDir = (lateral * 0.8 + desiredDir * 0.2).Normalized();
             detourVel = detourDir * agentData.v0 * 0.5;
-            newPos = agentData.position + detourVel * dT;
+            newPos = current.position + detourVel * dT;
             // If both sides fail, just creep toward goal
             if(!envQuery.InsideGeometry(newPos)) {
-                newPos = agentData.position + desiredDir * agentData.v0 * 0.1 * dT;
+                newPos = current.position + desiredDir * agentData.v0 * 0.1 * dT;
                 detourDir = desiredDir;
             }
         }
@@ -687,7 +687,7 @@ void WarpDriverModel::ComputeNextState(
             anchorX = newPos.x;
             anchorY = newPos.y;
         }
-        nextData.position = newPos;
+        next.position = newPos;
         nextData.orientation = detourDir;
         nextData.stuckTime = stuckTime;
         nextData.anchorX = anchorX;
@@ -704,13 +704,13 @@ void WarpDriverModel::ComputeNextState(
 
     stuckTime += dT;
     const double netDisplacement =
-        std::hypot(agentData.position.x - anchorX, agentData.position.y - anchorY);
+        std::hypot(current.position.x - anchorX, current.position.y - anchorY);
 
     if(netDisplacement > progressRadius) {
         // Real progress — reset anchor to current position
         stuckTime = 0.0;
-        anchorX = agentData.position.x;
-        anchorY = agentData.position.y;
+        anchorX = current.position.x;
+        anchorY = current.position.y;
     } else if(stuckTime >= stuckThreshold) {
         // Stuck: no net progress for stuckThreshold seconds — enter detour
         std::uniform_int_distribution<int> sideDist(0, 1);
@@ -728,10 +728,10 @@ void WarpDriverModel::ComputeNextState(
         smoothedVel = smoothedVel * (agentData.v0 / smoothedSpeed);
     }
 
-    Point newPos = agentData.position + smoothedVel * dT;
+    Point newPos = current.position + smoothedVel * dT;
     Point newOrient = (smoothedVel.Norm() > 1e-9) ? smoothedVel.Normalized() : orient;
 
-    nextData.position = newPos;
+    next.position = newPos;
     nextData.orientation = newOrient;
     nextData.stuckTime = stuckTime;
     nextData.anchorX = anchorX;

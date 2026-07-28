@@ -32,6 +32,7 @@ def _add_agent(sim, journey_id, stage_id, position, group=0):
     return sim.add_agent(
         journey_id=journey_id,
         stage_id=stage_id,
+        position=position,
         state=_State(position=position, group=group),
     )
 

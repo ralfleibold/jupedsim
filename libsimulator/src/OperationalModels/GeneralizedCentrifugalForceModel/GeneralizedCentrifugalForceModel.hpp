@@ -14,7 +14,6 @@ class GeneralizedCentrifugalForceModel : public OperationalModel
 public:
     /// Per-agent state of the generalized centrifugal force model.
     struct State {
-        Point position{};
         Point orientation{1.0, 0.0};
         double speed{};
         Point e0{};

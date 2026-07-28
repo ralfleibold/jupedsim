@@ -46,7 +46,7 @@ public:
         auto& nextModelData = std::get<CustomModel::State>(next.model);
         auto& nextState = nextModelData.Get<MinimalState>();
 
-        nextModelData.position = currentModelData.position + state.velocity * dT;
+        next.position = current.position + state.velocity * dT;
         nextState.velocity = state.velocity;
         nextState.applications = state.applications + 1;
     }
@@ -54,12 +54,13 @@ public:
     void CheckModelConstraint(const GenericAgent&, const EnvironmentQuery&) const override {}
 };
 
-GenericAgent MakeAgent(GenericAgent::ModelState model)
+GenericAgent MakeAgent(GenericAgent::ModelState model, Point position = {})
 {
     return GenericAgent(
         GenericAgent::ID::Invalid,
         jps::UniqueID<Journey>::Invalid,
         jps::UniqueID<BaseStage>::Invalid,
+        position,
         std::move(model));
 }
 } // namespace
@@ -122,7 +123,7 @@ TEST(CustomModel, RunsThroughOperationalDecisionSystem)
 
     const auto& agent = agents.front();
     const auto& state = std::get<CustomModel::State>(agent.model).Get<MinimalState>();
-    ASSERT_EQ(agent.position(), Point(1.0, 0.0));
+    ASSERT_EQ(agent.position, Point(1.0, 0.0));
     ASSERT_EQ(state.applications, 1);
 }
 

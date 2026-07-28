@@ -16,7 +16,7 @@ void init_environment_query(py::module_& m)
         .def(
             "other_agents_in_range",
             [](const EnvironmentQuery& self, const GenericAgent& agent, double radius) {
-                return self.OtherAgentsInRange(agent.model, radius);
+                return self.OtherAgentsInRange(agent, radius);
             },
             py::arg("agent"),
             py::arg("radius"),
