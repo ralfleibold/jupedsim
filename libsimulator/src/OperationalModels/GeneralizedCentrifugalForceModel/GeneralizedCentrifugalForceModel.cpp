@@ -129,7 +129,6 @@ void GeneralizedCentrifugalForceModel::CheckModelConstraint(
 
     const auto neighbors = envQuery.OtherAgentsInRange(agent, 2.0);
     for(const auto& neighbor : neighbors) {
-        const auto& neighborModel = std::get<State>(neighbor.model);
         const auto contanctDist = AgentToAgentSpacing(agent, neighbor);
         const auto distance = (agent.position - neighbor.position).Norm();
         if(contanctDist >= distance) {

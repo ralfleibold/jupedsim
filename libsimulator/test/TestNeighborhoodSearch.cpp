@@ -5,9 +5,7 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
-#include <iostream>
-#include <iterator>
-#include <memory>
+#include <set>
 
 template <typename T>
 struct ValueWithPos {
@@ -15,11 +13,22 @@ struct ValueWithPos {
     T val;
 };
 
+namespace
+{
+std::set<int>
+ItemIdsInRange(const NeighborhoodSearch<ValueWithPos<int>>& neighborhood, Point pos, double radius)
+{
+    std::set<int> ids{};
+    neighborhood.for_each_in_range(
+        pos, radius, [&ids](const ValueWithPos<int>& item) { ids.insert(item.val); });
+    return ids;
+}
+} // namespace
+
 TEST(NeighborhoodSearch, ReturnsEmptyOnEmpty)
 {
     NeighborhoodSearch<ValueWithPos<int>> neighborhood{3};
-    const auto range = neighborhood.GetNeighboringAgents({0, 0}, 10);
-    ASSERT_EQ(std::begin(range), std::end(range));
+    ASSERT_TRUE(ItemIdsInRange(neighborhood, {0, 0}, 10).empty());
 }
 
 TEST(NeighborhoodSearch, ReturnsOneValueInRange)
@@ -28,15 +37,7 @@ TEST(NeighborhoodSearch, ReturnsOneValueInRange)
     const AgentContainer<ValueWithPos<int>> agents{{{0, 0}, 1}};
     neighborhood.Update(agents);
 
-    const auto expected = std::set<int>{1};
-    const auto result = neighborhood.GetNeighboringAgents({0, 0}, 10);
-    std::set<int> actual{};
-    std::transform(
-        std::begin(result),
-        std::end(result),
-        std::inserter(actual, std::begin(actual)),
-        [](const auto& v) { return v.val; });
-    ASSERT_EQ(actual, expected);
+    ASSERT_EQ(ItemIdsInRange(neighborhood, {0, 0}, 10), (std::set<int>{1}));
 }
 
 TEST(NeighborhoodSearch, ReturnsMultipleValuesInRange)
@@ -45,15 +46,7 @@ TEST(NeighborhoodSearch, ReturnsMultipleValuesInRange)
     const AgentContainer<ValueWithPos<int>> agents{{{0, 0}, 1}, {{0, 0}, 0}};
     neighborhood.Update(agents);
 
-    const auto expected = std::set<int>{1, 0};
-    const auto result = neighborhood.GetNeighboringAgents({0, 0}, 10);
-    std::set<int> actual{};
-    std::transform(
-        std::begin(result),
-        std::end(result),
-        std::inserter(actual, std::begin(actual)),
-        [](const auto& v) { return v.val; });
-    ASSERT_EQ(actual, expected);
+    ASSERT_EQ(ItemIdsInRange(neighborhood, {0, 0}, 10), (std::set<int>{1, 0}));
 }
 
 TEST(NeighborhoodSearch, ReturnsValuesFromDifferentInternalGridCells)
@@ -62,15 +55,7 @@ TEST(NeighborhoodSearch, ReturnsValuesFromDifferentInternalGridCells)
     const AgentContainer<ValueWithPos<int>> agents{{{0, 0}, 1}, {{-3, 0}, 0}, {{4, 4}, 6}};
     neighborhood.Update(agents);
 
-    const auto expected = std::set<int>{1, 0, 6};
-    const auto result = neighborhood.GetNeighboringAgents({0, 0}, 10);
-    std::set<int> actual{};
-    std::transform(
-        std::begin(result),
-        std::end(result),
-        std::inserter(actual, std::begin(actual)),
-        [](const auto& v) { return v.val; });
-    ASSERT_EQ(actual, expected);
+    ASSERT_EQ(ItemIdsInRange(neighborhood, {0, 0}, 10), (std::set<int>{1, 0, 6}));
 }
 
 TEST(NeighborhoodSearch, RejectesValuesInGridCellsTooFarAway)
@@ -80,15 +65,7 @@ TEST(NeighborhoodSearch, RejectesValuesInGridCellsTooFarAway)
         {{0, 0}, 1}, {{-3, 0}, 0}, {{4, 4}, 6}, {{10, 10}, 7}};
     neighborhood.Update(agents);
 
-    const auto expected = std::set<int>{1, 0, 6};
-    const auto result = neighborhood.GetNeighboringAgents({0, 0}, 10);
-    std::set<int> actual{};
-    std::transform(
-        std::begin(result),
-        std::end(result),
-        std::inserter(actual, std::begin(actual)),
-        [](const auto& v) { return v.val; });
-    ASSERT_EQ(actual, expected);
+    ASSERT_EQ(ItemIdsInRange(neighborhood, {0, 0}, 10), (std::set<int>{1, 0, 6}));
 }
 
 TEST(NeighborhoodSearch, RejectsValuesFromSelectedGridThatareTooFarAway)
@@ -97,15 +74,7 @@ TEST(NeighborhoodSearch, RejectsValuesFromSelectedGridThatareTooFarAway)
     const AgentContainer<ValueWithPos<int>> agents{{{0, 0}, 1}, {{0.5, 0.5}, 2}, {{0.4, 0.4}, 3}};
     neighborhood.Update(agents);
 
-    const auto expected = std::set<int>{1, 3};
-    const auto result = neighborhood.GetNeighboringAgents({0, 0}, 0.41 * sqrt(2.0));
-    std::set<int> actual{};
-    std::transform(
-        std::begin(result),
-        std::end(result),
-        std::inserter(actual, std::begin(actual)),
-        [](const auto& v) { return v.val; });
-    ASSERT_EQ(actual, expected);
+    ASSERT_EQ(ItemIdsInRange(neighborhood, {0, 0}, 0.41 * sqrt(2.0)), (std::set<int>{1, 3}));
 }
 
 TEST(NeighborhoodSearch, ReturnsValueExactlyDistanceAwayFromQueryPoint)
@@ -114,13 +83,5 @@ TEST(NeighborhoodSearch, ReturnsValueExactlyDistanceAwayFromQueryPoint)
     const AgentContainer<ValueWithPos<int>> agents{{{1, 0}, 1}};
     neighborhood.Update(agents);
 
-    const auto expected = std::set<int>{1};
-    const auto result = neighborhood.GetNeighboringAgents({0, 0}, 1);
-    std::set<int> actual{};
-    std::transform(
-        std::begin(result),
-        std::end(result),
-        std::inserter(actual, std::begin(actual)),
-        [](const auto& v) { return v.val; });
-    ASSERT_EQ(actual, expected);
+    ASSERT_EQ(ItemIdsInRange(neighborhood, {0, 0}, 1), (std::set<int>{1}));
 }

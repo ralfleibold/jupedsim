@@ -40,9 +40,11 @@ public:
     std::vector<GenericAgent>
     OtherAgentsInRange(const GenericAgent& agent, double radius, Pred filter = {}) const
     {
-        auto neighbors = _nsearch.GetNeighboringAgents(agent.position, radius);
-        std::erase_if(neighbors, [&](const GenericAgent& candidate) {
-            return candidate.id == agent.id || !filter(candidate.position);
+        std::vector<GenericAgent> neighbors{};
+        _nsearch.for_each_in_range(agent.position, radius, [&](const GenericAgent& candidate) {
+            if(candidate.id != agent.id && filter(candidate.position)) {
+                neighbors.push_back(candidate);
+            }
         });
         return neighbors;
     }
@@ -51,9 +53,12 @@ public:
     std::vector<GenericAgent>
     AgentsInRange(const Point& from, double radius, Pred filter = {}) const
     {
-        auto neighbors = _nsearch.GetNeighboringAgents(from, radius);
-        std::erase_if(
-            neighbors, [&](const GenericAgent& candidate) { return !filter(candidate.position); });
+        std::vector<GenericAgent> neighbors{};
+        _nsearch.for_each_in_range(from, radius, [&](const GenericAgent& candidate) {
+            if(filter(candidate.position)) {
+                neighbors.push_back(candidate);
+            }
+        });
         return neighbors;
     }
 
