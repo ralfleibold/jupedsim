@@ -60,7 +60,11 @@ Point GeneralizedCentrifugalForceModel::ComputeNextState(
     // constructed value is what gets stored then.
     Point e0{};
     // repulsive forces to the walls and transitions that are not my target
-    const Point repwall = ForceRepRoom(model, step);
+    Point repwall{};
+    for(const auto& wall : step.walls_nearby()) {
+        repwall += ForceRepWall(model, wall);
+    }
+
     const Point fd = ForceDriv(model, step.to_next_target(), model.mass, model.tau, step.dt(), e0);
     const Point acc = (fd + F_rep + repwall) / model.mass;
 
@@ -137,8 +141,7 @@ void GeneralizedCentrifugalForceModel::CheckModelConstraint(
     }
 
     const auto maxRadius = std::max(AMin, BMax) / 2.;
-    const auto lineSegments = view.walls_in_range(maxRadius);
-    if(std::begin(lineSegments) != std::end(lineSegments)) {
+    if(!view.walls_in_range(maxRadius).empty()) {
         throw SimulationError(
             "Model constraint violation: Agent {} too close to geometry boundaries, distance <= {}",
             agent.position,
@@ -277,29 +280,6 @@ Point GeneralizedCentrifugalForceModel::ForceRepPed(const State& self, const Nei
             K_ij);
     }
     return F_rep;
-}
-
-/* abstoßende Kraft zwischen ped und subroom
- * Parameter:
- *   - ped: Fußgänger für den die Kraft berechnet wird
- *   - subroom: SubRoom für den alle abstoßende Kräfte von Wänden berechnet werden
- * Rückgabewerte:
- *   - Vektor(x,y) mit Summe aller abstoßenden Kräfte im SubRoom
- * */
-
-inline Point
-GeneralizedCentrifugalForceModel::ForceRepRoom(const State& self, const AgentStep& step) const
-{
-    const auto& walls = step.walls_nearby();
-
-    auto f = std::accumulate(
-        std::begin(walls),
-        std::end(walls),
-        Point(0, 0),
-        [this, &self](const auto& acc, const auto& element) {
-            return acc + ForceRepWall(self, element);
-        });
-    return f;
 }
 
 inline Point

@@ -5,6 +5,7 @@
 
 #include <gtest/gtest.h>
 
+#include <iterator>
 #include <vector>
 
 namespace
@@ -39,7 +40,7 @@ TEST(SegmentGrid, DistanceQueryReturnsSegmentsWithinRange)
 {
     const auto grid = singleVerticalWall();
     // Perpendicular distance from (1,5) to the wall is 1.
-    EXPECT_EQ(grid.LineSegmentsInDistanceTo(2., {1., 5.}).size(), 1u);
+    EXPECT_EQ(std::ranges::distance(grid.LineSegmentsInDistanceTo(2., {1., 5.})), 1);
 }
 
 TEST(SegmentGrid, DistanceQueryExcludesSegmentsOutOfRange)
@@ -58,9 +59,9 @@ TEST(SegmentGrid, DistanceQueryGrowingRadiusPicksUpParallelSegmentsOneByOne)
         LineSegment{{0., 4.}, {10., 14.}}}}; // B
     const Point p{5., 6.};
 
-    EXPECT_EQ(grid.LineSegmentsInDistanceTo(0.5, p).size(), 0u); // below both
-    EXPECT_EQ(grid.LineSegmentsInDistanceTo(1.0, p).size(), 1u); // reaches A only
-    EXPECT_EQ(grid.LineSegmentsInDistanceTo(3.0, p).size(), 2u); // reaches both
+    EXPECT_EQ(std::ranges::distance(grid.LineSegmentsInDistanceTo(0.5, p)), 0); // below both
+    EXPECT_EQ(std::ranges::distance(grid.LineSegmentsInDistanceTo(1.0, p)), 1); // reaches A only
+    EXPECT_EQ(std::ranges::distance(grid.LineSegmentsInDistanceTo(3.0, p)), 2); // reaches both
 }
 
 TEST(SegmentGrid, DistanceQueryMeasuresToTheSegmentNotItsInfiniteLine)
@@ -70,7 +71,7 @@ TEST(SegmentGrid, DistanceQueryMeasuresToTheSegmentNotItsInfiniteLine)
     const Point beyondEnd{13., 0.}; // collinear, 3 past the (10,0) endpoint
 
     EXPECT_TRUE(grid.LineSegmentsInDistanceTo(2., beyondEnd).empty()); // 3 > 2
-    EXPECT_EQ(grid.LineSegmentsInDistanceTo(4., beyondEnd).size(), 1u); // 3 <= 4
+    EXPECT_EQ(std::ranges::distance(grid.LineSegmentsInDistanceTo(4., beyondEnd)), 1); // 3 <= 4
 }
 
 TEST(SegmentGrid, ApproxDistanceQueryReturnsCandidatesNearby)

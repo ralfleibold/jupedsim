@@ -5,11 +5,11 @@
 #include "OperationalModels/CustomModel/CustomModel.hpp"
 #include "conversion.hpp"
 #include "python_model.hpp"
+#include "type_casters.hpp" // IWYU pragma: keep
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-#include <tuple>
 #include <variant>
 
 namespace py = pybind11;
@@ -17,9 +17,7 @@ namespace py = pybind11;
 void init_agent_view(py::module_& m)
 {
     py::class_<NeighborView>(m, "NeighborView")
-        .def_property_readonly(
-            "relative_position",
-            [](const NeighborView& self) { return intoTuple(self.relative_position); })
+        .def_readonly("relative_position", &NeighborView::relative_position)
         .def_property_readonly("state", [](const NeighborView& self) -> py::object {
             const auto& state = static_cast<const OperationalModelStateVariant&>(*self.state);
             if(const auto* custom = std::get_if<CustomModel::State>(&state)) {
@@ -38,16 +36,12 @@ void init_agent_view(py::module_& m)
             "Neighbors within radius, each as the vector pointing to it.")
         .def(
             "no_geometry_between",
-            [](const AgentView& self, std::tuple<double, double> relative_position) {
-                return self.no_geometry_between(intoPoint(relative_position));
-            },
+            &AgentView::no_geometry_between,
             py::arg("relative_position"),
             "True when nothing blocks the straight line to relative_position.")
         .def(
             "inside_geometry",
-            [](const AgentView& self, std::tuple<double, double> relative_position) {
-                return self.inside_geometry(intoPoint(relative_position));
-            },
+            &AgentView::inside_geometry,
             py::arg("relative_position"),
             "True when moving by relative_position stays inside the walkable area.")
         .def(
@@ -64,7 +58,5 @@ void init_agent_view(py::module_& m)
 
     py::class_<AgentStep, AgentView>(m, "AgentStep")
         .def_property_readonly("dt", &AgentStep::dt)
-        .def_property_readonly("to_next_target", [](const AgentStep& self) {
-            return intoTuple(self.to_next_target());
-        });
+        .def_property_readonly("to_next_target", &AgentStep::to_next_target);
 }

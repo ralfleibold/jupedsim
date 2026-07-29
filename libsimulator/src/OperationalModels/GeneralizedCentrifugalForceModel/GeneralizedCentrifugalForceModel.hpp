@@ -87,7 +87,6 @@ private:
      * Sum of the repulsive forces of all walls surrounding the pedestrian.
      * @see ForceRepWall
      */
-    Point ForceRepRoom(const State& self, const AgentStep& step) const;
     Point ForceRepWall(const State& self, const LineSegment& w) const;
     Point ForceRepStatPoint(const State& self, const Point& p, double l, double vn) const;
     Point ForceInterpolation(

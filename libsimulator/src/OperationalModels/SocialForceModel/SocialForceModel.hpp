@@ -63,9 +63,8 @@ private:
      */
     Point ObstacleForce(const State& self, const LineSegment& segment) const;
     /**
-     * calculates the pushing and friction forces acting between <pt1> and <pt2>
-     * @param pt1 Point on which the forces act
-     * @param pt2 Point from which the forces originate
+     * calculates the pushing and friction forces along <separation>
+     * @param separation vector pointing from where the force originates to where it acts
      * @param A State scale
      * @param B force distance
      * @param r radius
@@ -82,15 +81,6 @@ private:
         const double bodyForce,
         const double friction);
 
-    static Point ForceBetweenPoints(
-        const Point pt1,
-        const Point pt2,
-        const double A,
-        const double B,
-        const double radius,
-        const Point velocity,
-        const double bodyForce,
-        const double friction);
     /**
      *  exponential function that specifies the length of the pushing force between two points
      * @param A State scale

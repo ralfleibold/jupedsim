@@ -10,8 +10,6 @@
 #include "SimulationError.hpp"
 
 #include <cmath>
-#include <iterator>
-#include <numeric>
 #include <string>
 
 SocialForceModel::SocialForceModel(double bodyForce, double friction)
@@ -40,15 +38,10 @@ Point SocialForceModel::ComputeNextState(
         F_rep += AgentForce(model, neighbor);
     }
     forces += F_rep / model.mass;
-    const auto& walls = step.walls_nearby();
-
-    const auto obstacle_f = std::accumulate(
-        std::begin(walls),
-        std::end(walls),
-        Point(0, 0),
-        [this, &model](const auto& acc, const auto& element) {
-            return acc + ObstacleForce(model, element);
-        });
+    Point obstacle_f{};
+    for(const auto& wall : step.walls_nearby()) {
+        obstacle_f += ObstacleForce(model, wall);
+    }
     forces += obstacle_f / model.mass;
 
     const auto velocity = model.velocity + forces * step.dt();
@@ -100,8 +93,7 @@ void SocialForceModel::CheckModelConstraint(const GenericAgent& agent, const Age
         }
     }
     const auto maxRadius = model.radius / 2;
-    const auto lineSegments = view.walls_in_range(maxRadius);
-    if(std::begin(lineSegments) != std::end(lineSegments)) {
+    if(!view.walls_in_range(maxRadius).empty()) {
         throw SimulationError(
             "Model constraint violation: Agent {} too close to geometry boundaries, distance <= "
             "{}/2",
@@ -139,28 +131,14 @@ Point SocialForceModel::AgentForce(const State& self, const NeighborView& neighb
 Point SocialForceModel::ObstacleForce(const State& self, const LineSegment& segment) const
 {
     const Point pt = segment.ShortestPoint(Point{});
-    return ForceBetweenPoints(
-        Point{},
-        pt,
+    return ForceFromSeparation(
+        -pt,
         self.obstacleScale,
         self.forceDistance,
         self.radius,
         self.velocity,
         this->bodyForce,
         this->friction);
-}
-
-Point SocialForceModel::ForceBetweenPoints(
-    const Point pt1,
-    const Point pt2,
-    const double A,
-    const double B,
-    const double radius,
-    const Point velocity,
-    const double bodyForce,
-    const double friction)
-{
-    return ForceFromSeparation(pt1 - pt2, A, B, radius, velocity, bodyForce, friction);
 }
 
 Point SocialForceModel::ForceFromSeparation(

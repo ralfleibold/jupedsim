@@ -13,7 +13,6 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <numeric>
 #include <vector>
 
 namespace
@@ -71,18 +70,14 @@ Point CollisionFreeSpeedModelV3::ComputeNextState(
     const AgentStep& step) const
 {
     const auto& model = std::get<State>(current);
-    const auto& boundary = step.walls_nearby();
     auto neighborhood = step.other_agents_in_range(_cutOffRadius, [&step](const NeighborView& n) {
         return step.no_geometry_between(n.relative_position);
     });
 
-    const auto boundaryRepulsion = std::accumulate(
-        std::begin(boundary),
-        std::end(boundary),
-        Point(0, 0),
-        [this, &model](const auto& acc, const auto& element) {
-            return acc + BoundaryRepulsion(model, element);
-        });
+    Point boundaryRepulsion{};
+    for(const auto& wall : step.walls_nearby()) {
+        boundaryRepulsion += BoundaryRepulsion(model, wall);
+    }
 
     const auto desired_direction = step.to_next_target().Normalized();
     auto reference_direction = (desired_direction + boundaryRepulsion).Normalized();
@@ -99,23 +94,18 @@ Point CollisionFreeSpeedModelV3::ComputeNextState(
         direction = reference_direction;
     }
 
-    const auto spacing_move = std::accumulate(
-        std::begin(neighborhood),
-        std::end(neighborhood),
-        std::numeric_limits<double>::max(),
-        [&model, &direction, this](const auto& res, const auto& neighbor) {
-            return std::min(res, GetSpacing(model, neighbor, direction));
-        });
+    const auto closest_spacing_towards = [&](Point towards) {
+        auto spacing = std::numeric_limits<double>::max();
+        for(const auto& neighbor : neighborhood) {
+            spacing = std::min(spacing, GetSpacing(model, neighbor, towards));
+        }
+        return spacing;
+    };
 
+    const auto spacing_move = closest_spacing_towards(direction);
     const auto goal_direction =
         (desired_direction == Point{}) ? reference_direction : desired_direction;
-    const auto spacing_goal = std::accumulate(
-        std::begin(neighborhood),
-        std::end(neighborhood),
-        std::numeric_limits<double>::max(),
-        [&model, &goal_direction, this](const auto& res, const auto& neighbor) {
-            return std::min(res, GetSpacing(model, neighbor, goal_direction));
-        });
+    const auto spacing_goal = closest_spacing_towards(goal_direction);
 
     const auto spacing =
         spacing_move * (1.0 - SpacingBlendWeight) + spacing_goal * SpacingBlendWeight;
@@ -178,8 +168,7 @@ void CollisionFreeSpeedModelV3::CheckModelConstraint(
         }
     }
 
-    const auto lineSegments = view.walls_in_range(model.radius);
-    if(std::begin(lineSegments) != std::end(lineSegments)) {
+    if(!view.walls_in_range(model.radius).empty()) {
         throw SimulationError(
             "Model constraint violation: Agent {} too close to geometry boundaries, distance "
             "<= {}",

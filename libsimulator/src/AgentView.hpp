@@ -61,6 +61,9 @@ public:
 
 private:
     /// The segments as relative ones. Lazy range, no copies.
+    /// Must stay above walls_nearby() and walls_in_range() in code: an 'auto' return type is
+    /// deduced from the body, so unlike other members this one cannot be called before it is
+    /// defined.
     auto relative(Geometry2D::LineSegmentRange segments) const
     {
         return segments | std::views::transform([origin = _agent.position](const LineSegment& s) {
