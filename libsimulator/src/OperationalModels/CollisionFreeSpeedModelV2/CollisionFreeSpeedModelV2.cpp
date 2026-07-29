@@ -41,13 +41,12 @@ Point CollisionFreeSpeedModelV2::ComputeNextState(
             return res + NeighborRepulsion(model, neighbor);
         });
 
-    const auto position = step.position();
     const auto boundaryRepulsion = std::accumulate(
         std::begin(boundary),
         std::end(boundary),
         Point(0, 0),
-        [this, &model, position](const auto& acc, const auto& element) {
-            return acc + BoundaryRepulsion(model, position, element);
+        [this, &model](const auto& acc, const auto& element) {
+            return acc + BoundaryRepulsion(model, element);
         });
 
     const auto desired_direction = step.to_next_target().Normalized();
@@ -152,11 +151,9 @@ Point CollisionFreeSpeedModelV2::NeighborRepulsion(const State& self, const Neig
 
 Point CollisionFreeSpeedModelV2::BoundaryRepulsion(
     const State& self,
-    Point position,
     const LineSegment& boundary_segment) const
 {
-    const auto pt = boundary_segment.ShortestPoint(position);
-    const auto dist_vec = pt - position;
+    const auto dist_vec = boundary_segment.ShortestPoint(Point{});
     const auto [dist, e_iw] = dist_vec.NormAndNormalized();
     const auto l = self.radius;
     const auto R_iw =

@@ -143,24 +143,26 @@ class PythonSocialForceModel(CustomOperationalModel):
     @staticmethod
     def _obstacle_force(
         state,
-        position: tuple[float, float],
         obstacle: LineSegment,
     ) -> tuple[float, float]:
         """
         Compute repulsive force from an obstacle (line segment).
 
+        The obstacle is given relative to the agent, so the agent sits at (0, 0).
+
         Based on Helbing's model with psychological and body contact forces.
         """
+        agent = (0.0, 0.0)
         # Get closest point on obstacle to agent
-        closest_point = obstacle.closest_point(position)
-        dist = PythonSocialForceModel._distance(position, closest_point)
+        closest_point = obstacle.closest_point(agent)
+        dist = PythonSocialForceModel._distance(agent, closest_point)
 
         if dist < 1e-3:  # Avoid division by zero
             return (0.0, 0.0)
 
         # Normal direction (from obstacle to agent)
-        n_x = (position[0] - closest_point[0]) / dist
-        n_y = (position[1] - closest_point[1]) / dist
+        n_x = -closest_point[0] / dist
+        n_y = -closest_point[1] / dist
 
         # Distance-dependent factor
         exp_factor = np.exp(-dist / state.force_distance)
@@ -210,7 +212,7 @@ class PythonSocialForceModel(CustomOperationalModel):
 
         # Add obstacle forces (from geometry)
         for wall in step.walls_in_range(5.0):
-            fx, fy = self._obstacle_force(state, step.position, wall)
+            fx, fy = self._obstacle_force(state, wall)
             acc_x += fx / state.mass
             acc_y += fy / state.mass
 

@@ -47,8 +47,7 @@ private:
     double
     GetSpacing(const State& self, const NeighborView& neighbor, const Point& direction) const;
     Point NeighborRepulsion(const State& self, const NeighborView& neighbor) const;
-    Point
-    BoundaryRepulsion(const State& self, Point position, const LineSegment& boundary_segment) const;
+    Point BoundaryRepulsion(const State& self, const LineSegment& boundary_segment) const;
 };
 
 template <>

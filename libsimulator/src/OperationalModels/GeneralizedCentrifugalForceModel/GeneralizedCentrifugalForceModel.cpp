@@ -60,7 +60,7 @@ Point GeneralizedCentrifugalForceModel::ComputeNextState(
     // constructed value is what gets stored then.
     Point e0{};
     // repulsive forces to the walls and transitions that are not my target
-    const Point repwall = ForceRepRoom(model, step.position(), step);
+    const Point repwall = ForceRepRoom(model, step);
     const Point fd = ForceDriv(model, step.to_next_target(), model.mass, model.tau, step.dt(), e0);
     const Point acc = (fd + F_rep + repwall) / model.mass;
 
@@ -287,10 +287,8 @@ Point GeneralizedCentrifugalForceModel::ForceRepPed(const State& self, const Nei
  *   - Vektor(x,y) mit Summe aller abstoßenden Kräfte im SubRoom
  * */
 
-inline Point GeneralizedCentrifugalForceModel::ForceRepRoom(
-    const State& self,
-    Point position,
-    const AgentStep& step) const
+inline Point
+GeneralizedCentrifugalForceModel::ForceRepRoom(const State& self, const AgentStep& step) const
 {
     const auto& walls = step.walls_nearby();
 
@@ -298,19 +296,17 @@ inline Point GeneralizedCentrifugalForceModel::ForceRepRoom(
         std::begin(walls),
         std::end(walls),
         Point(0, 0),
-        [this, &self, position](const auto& acc, const auto& element) {
-            return acc + ForceRepWall(self, position, element);
+        [this, &self](const auto& acc, const auto& element) {
+            return acc + ForceRepWall(self, element);
         });
     return f;
 }
 
-inline Point GeneralizedCentrifugalForceModel::ForceRepWall(
-    const State& self,
-    Point position,
-    const LineSegment& w) const
+inline Point
+GeneralizedCentrifugalForceModel::ForceRepWall(const State& self, const LineSegment& w) const
 {
     Point F = Point(0.0, 0.0);
-    Point pt = w.ShortestPoint(position);
+    Point pt = w.ShortestPoint(Point{});
     double wlen = w.LengthSquare();
 
     if(wlen < 0.01) { // ignore walls smaller than 10 cm
@@ -318,13 +314,13 @@ inline Point GeneralizedCentrifugalForceModel::ForceRepWall(
     }
     // Kraft soll nur orthgonal wirken
     // ???
-    if(fabs((w.p1 - w.p2).ScalarProduct(position - pt)) > J_EPS) {
+    if(fabs((w.p1 - w.p2).ScalarProduct(Point{} - pt)) > J_EPS) {
         return F;
     }
     double mind = 0.5; // for performance reasons this distance is assumed to be constant
     double vn =
         w.NormalComp(self.orientation * self.speed); // normal component of the velocity on the wall
-    F = ForceRepStatPoint(self, position, pt, mind, vn);
+    F = ForceRepStatPoint(self, pt, mind, vn);
 
     return F; // line --> l != 0
 }
@@ -341,7 +337,6 @@ inline Point GeneralizedCentrifugalForceModel::ForceRepWall(
 // TODO: use effective DistanceToEllipse and simplify this function.
 Point GeneralizedCentrifugalForceModel::ForceRepStatPoint(
     const State& self,
-    Point position,
     const Point& p,
     double l,
     double vn) const
@@ -351,7 +346,7 @@ Point GeneralizedCentrifugalForceModel::ForceRepStatPoint(
     // I think the code can be rewritten to account for orientation and speed separately
     const auto& model = self;
     const Point v = model.orientation * model.speed;
-    Point dist = p - position; // x- and y-coordinate of the distance between ped and p
+    Point dist = p; // p is relative to the agent, so it already is the distance vector
     double d = dist.Norm(); // distance between the centre of ped and point p
     Point e_ij; // x- and y-coordinate of the normalized vector between ped and p
 
@@ -373,12 +368,12 @@ Point GeneralizedCentrifugalForceModel::ForceRepStatPoint(
     double K_ij;
     K_ij = 0.5 * bla / v.Norm(); // K_ij
     // Punkt auf der Ellipse
-    pinE = p.TransformToEllipseCoordinates(position, model.orientation.x, model.orientation.y);
+    pinE = p.TransformToEllipseCoordinates(Point{}, model.orientation.x, model.orientation.y);
     const auto v0 = model.v0;
     // Punkt auf der Ellipse
-    r = E.PointOnEllipse(pinE, model.speed / v0, position, model.speed, model.orientation);
+    r = E.PointOnEllipse(pinE, model.speed / v0, Point{}, model.speed, model.orientation);
     // interpolierte Kraft
-    F_rep = ForceInterpolation(v0, K_ij, e_ij, vn, d, (r - position).Norm(), l);
+    F_rep = ForceInterpolation(v0, K_ij, e_ij, vn, d, r.Norm(), l);
     return F_rep;
 }
 

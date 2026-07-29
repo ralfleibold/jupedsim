@@ -46,8 +46,8 @@ Point SocialForceModel::ComputeNextState(
         std::begin(walls),
         std::end(walls),
         Point(0, 0),
-        [this, &model, position = step.position()](const auto& acc, const auto& element) {
-            return acc + ObstacleForce(model, position, element);
+        [this, &model](const auto& acc, const auto& element) {
+            return acc + ObstacleForce(model, element);
         });
     forces += obstacle_f / model.mass;
 
@@ -136,12 +136,11 @@ Point SocialForceModel::AgentForce(const State& self, const NeighborView& neighb
         this->friction);
 };
 
-Point SocialForceModel::ObstacleForce(const State& self, Point position, const LineSegment& segment)
-    const
+Point SocialForceModel::ObstacleForce(const State& self, const LineSegment& segment) const
 {
-    const Point pt = segment.ShortestPoint(position);
+    const Point pt = segment.ShortestPoint(Point{});
     return ForceBetweenPoints(
-        position,
+        Point{},
         pt,
         self.obstacleScale,
         self.forceDistance,

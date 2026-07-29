@@ -71,7 +71,7 @@ Point AnticipationVelocityModel::ComputeNextState(
 
     const auto optimal_speed = OptimalSpeed(model, spacing, model.timeGap);
     direction = HandleWallAvoidance(
-        direction, step.position(), model.radius, boundary, wallBufferDistance, _pushoutStrength);
+        direction, model.radius, boundary, wallBufferDistance, _pushoutStrength);
 
     const auto velocity = direction * optimal_speed;
     auto& nextModel = std::get<State>(next);
@@ -275,7 +275,6 @@ Point AnticipationVelocityModel::NeighborRepulsion(
 
 Point AnticipationVelocityModel::HandleWallAvoidance(
     const Point& direction,
-    const Point& agentPosition,
     double agentRadius,
     const auto& boundary,
     double wallBufferDistance,
@@ -287,11 +286,10 @@ Point AnticipationVelocityModel::HandleWallAvoidance(
     std::for_each(
         std::begin(boundary),
         std::end(boundary),
-        [&agentPosition, &criticalWallDistance, &modifiedDirection, pushoutStrength](
-            const LineSegment& wall) {
-            const auto closestPoint = wall.ShortestPoint(agentPosition);
+        [&criticalWallDistance, &modifiedDirection, pushoutStrength](const LineSegment& wall) {
+            const auto closestPoint = wall.ShortestPoint(Point{});
 
-            const auto distanceVector = agentPosition - closestPoint;
+            const auto distanceVector = Point{} - closestPoint;
             const auto [distance, normalTowardAgent] = distanceVector.NormAndNormalized();
 
             if(distance > criticalWallDistance) {

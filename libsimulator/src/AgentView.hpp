@@ -6,6 +6,7 @@
 #include "Point.hpp"
 
 #include <concepts>
+#include <ranges>
 #include <type_traits>
 #include <vector>
 
@@ -58,18 +59,29 @@ public:
         return _world.InsideGeometry(_agent.position + relative_position);
     }
 
-    /// Temporary: the models still compute their wall distances from an absolute
-    /// position. Goes away once the geometry is handed out relative to the agent, the
-    /// way neighbours already are.
+    /// Temporary: WarpDriver stores an absolute anchor position in its model state to detect
+    /// stuck agents. Goes away once that anchor is kept as an accumulated displacement.
     Point position() const { return _agent.position; }
 
-    /// Wall segments in the grid cells around the agent. This is an approximation of
-    /// proximity, not a radius: it returns whatever shares a cell neighbourhood.
-    auto walls_nearby() const { return _world.LineSegmentsInRange(_agent.position); }
+private:
+    /// The segments as relative ones. Lazy range, no copies.
+    auto relative(Geometry2D::LineSegmentRange segments) const
+    {
+        return segments | std::views::transform([origin = _agent.position](const LineSegment& s) {
+                   return LineSegment{s.p1 - origin, s.p2 - origin};
+               });
+    }
 
+public:
+    /// Wall segments in the grid cells around the agent, relative to it. The returned segments
+    /// depend on the underlying grid cell size.
+    /// Returned as lazy range.
+    auto walls_nearby() const { return relative(_world.LineSegmentsInRange(_agent.position)); }
+
+    /// Wall segments within 'distance' of the agent, relative to it. Returns lazy range.
     auto walls_in_range(double distance) const
     {
-        return _world.LineSegmentsInRange(_agent.position, distance);
+        return relative(_world.LineSegmentsInRange(_agent.position, distance));
     }
 
 protected:

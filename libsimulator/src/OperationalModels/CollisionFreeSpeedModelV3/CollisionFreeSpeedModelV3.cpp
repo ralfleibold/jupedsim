@@ -76,13 +76,12 @@ Point CollisionFreeSpeedModelV3::ComputeNextState(
         return step.no_geometry_between(n.relative_position);
     });
 
-    const auto position = step.position();
     const auto boundaryRepulsion = std::accumulate(
         std::begin(boundary),
         std::end(boundary),
         Point(0, 0),
-        [this, &model, position](const auto& acc, const auto& element) {
-            return acc + BoundaryRepulsion(model, position, element);
+        [this, &model](const auto& acc, const auto& element) {
+            return acc + BoundaryRepulsion(model, element);
         });
 
     const auto desired_direction = step.to_next_target().Normalized();
@@ -219,11 +218,9 @@ double CollisionFreeSpeedModelV3::GetSpacing(
 
 Point CollisionFreeSpeedModelV3::BoundaryRepulsion(
     const State& self,
-    Point position,
     const LineSegment& boundary_segment) const
 {
-    const auto pt = boundary_segment.ShortestPoint(position);
-    const auto dist_vec = pt - position;
+    const auto dist_vec = boundary_segment.ShortestPoint(Point{});
     const auto [dist, e_iw] = dist_vec.NormAndNormalized();
     const auto l = self.radius;
     const auto R_iw =

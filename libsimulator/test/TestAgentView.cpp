@@ -8,6 +8,8 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <limits>
 #include <vector>
 
 namespace
@@ -193,4 +195,58 @@ TEST(AgentView, OtherAgentsInRangeCentresOnTheQueryingAgentNotTheOrigin)
 
     ASSERT_EQ(result.size(), 1u);
     EXPECT_EQ(result[0].relative_position, Point(1, 0));
+}
+
+TEST(AgentView, WallsInRangeAreRelativeToTheAgent)
+{
+    Environment env{};
+    const Point pos{-1.0, 2.0};
+    env.add_agent(pos);
+    const auto geo = WalledGeometry();
+    const auto q = env.query(geo);
+
+    std::vector<LineSegment> expected{};
+    for(const auto& segment : q.LineSegmentsInRange(pos, 3.0)) {
+        expected.push_back({segment.p1 - pos, segment.p2 - pos});
+    }
+    ASSERT_FALSE(expected.empty());
+
+    const auto view = env.first_agent_view(q);
+    std::vector<LineSegment> actual{};
+    for(const auto& segment : view.walls_in_range(3.0)) {
+        actual.push_back(segment);
+    }
+
+    EXPECT_EQ(actual, expected);
+
+    // The near face of the wall block sits at x = 0.9, so measured from the agent it is
+    // 1.9 away. Anything computed against the origin instead would report 0.9.
+    double closest = std::numeric_limits<double>::max();
+    for(const auto& segment : actual) {
+        closest = std::min(closest, segment.ShortestPoint(Point{}).Norm());
+    }
+    EXPECT_DOUBLE_EQ(closest, 1.9);
+}
+
+TEST(AgentView, WallsNearbyAreRelativeToTheAgent)
+{
+    Environment env{};
+    const Point pos{-1.0, 2.0};
+    env.add_agent(pos);
+    const auto geo = WalledGeometry();
+    const auto q = env.query(geo);
+
+    std::vector<LineSegment> expected{};
+    for(const auto& segment : q.LineSegmentsInRange(pos)) {
+        expected.push_back({segment.p1 - pos, segment.p2 - pos});
+    }
+    ASSERT_FALSE(expected.empty());
+
+    const auto view = env.first_agent_view(q);
+    std::vector<LineSegment> actual{};
+    for(const auto& segment : view.walls_nearby()) {
+        actual.push_back(segment);
+    }
+
+    EXPECT_EQ(actual, expected);
 }

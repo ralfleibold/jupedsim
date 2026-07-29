@@ -114,6 +114,8 @@ class AgentView:
     def walls_nearby(self) -> list[LineSegment]:
         """Return geometry boundary segments in the grid cells around the agent.
 
+        The segments are relative to the agent's current position.
+
         Faster than :meth:`walls_in_range`, but an approximation of proximity
         rather than a radius: it returns whatever shares a cell neighborhood.
 
@@ -127,6 +129,8 @@ class AgentView:
     def walls_in_range(self, distance: float) -> list[LineSegment]:
         """Return geometry boundary segments within *distance* of the agent.
 
+        The segments are relative to the agent's current position.
+
         Args:
             distance: Maximum distance.
 
@@ -136,18 +140,6 @@ class AgentView:
         from jupedsim.linesegment import LineSegment
 
         return [LineSegment(ls) for ls in self._obj.walls_in_range(distance)]
-
-    @property
-    def position(self) -> tuple[float, float]:
-        """Absolute position of the agent as ``(x, y)``.
-
-        TEMPORARY:
-        Wall segments are still reported in absolute coordinates, so a model
-        that reacts to geometry needs this to relate the two. It goes away once
-        :meth:`walls_nearby` and :meth:`walls_in_range` report segments
-        relative to the agent, the way neighbors already are.
-        """
-        return self._obj.position
 
 
 class AgentStep(AgentView):

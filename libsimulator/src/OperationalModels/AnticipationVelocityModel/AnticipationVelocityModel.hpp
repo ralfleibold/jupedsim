@@ -60,7 +60,6 @@ private:
 
     Point HandleWallAvoidance(
         const Point& direction,
-        const Point& agentPosition,
         double agentRadius,
         const auto& boundary,
         double wallBufferDistance,

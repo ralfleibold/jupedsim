@@ -53,16 +53,14 @@ void init_agent_view(py::module_& m)
         .def(
             "walls_nearby",
             [](const AgentView& self) { return intoVec(self.walls_nearby()); },
-            "Geometry segments in the grid cells around the agent.")
+            "Geometry segments in the grid cells around the agent, relative to it.")
         .def(
             "walls_in_range",
             [](const AgentView& self, double distance) {
                 return intoVec(self.walls_in_range(distance));
             },
             py::arg("distance"),
-            "Geometry segments within exact distance of the agent.")
-        .def_property_readonly(
-            "position", [](const AgentView& self) { return intoTuple(self.position()); });
+            "Geometry segments within exact distance of the agent, relative to it.");
 
     py::class_<AgentStep, AgentView>(m, "AgentStep")
         .def_property_readonly("dt", &AgentStep::dt)

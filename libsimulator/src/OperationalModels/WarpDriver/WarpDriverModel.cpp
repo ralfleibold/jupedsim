@@ -630,10 +630,10 @@ Point WarpDriverModel::ComputeNextState(
         if(wallLen2 < 1e-12) {
             continue; // degenerate wall segment
         }
-        const Point toAgent = step.position() - wall.p1;
+        const Point toAgent = Point{} - wall.p1;
         const double t = std::clamp(toAgent.ScalarProduct(wallVec) / wallLen2, 0.0, 1.0);
         const Point closest = wall.p1 + wallVec * t;
-        const Point diff = step.position() - closest;
+        const Point diff = Point{} - closest;
         const double dist = diff.Norm();
         if(dist < agentData.radius * 3.0 && dist > 1e-6) {
             const double steering = agentData.v0 * (agentData.radius * 3.0 - dist) / dist;

@@ -61,7 +61,7 @@ private:
      * @param segment reference to line segment, from which the force originates
      * @return vector with the repulsive force
      */
-    Point ObstacleForce(const State& self, Point position, const LineSegment& segment) const;
+    Point ObstacleForce(const State& self, const LineSegment& segment) const;
     /**
      * calculates the pushing and friction forces acting between <pt1> and <pt2>
      * @param pt1 Point on which the forces act
