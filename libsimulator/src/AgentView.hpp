@@ -59,10 +59,6 @@ public:
         return _world.InsideGeometry(_agent.position + relative_position);
     }
 
-    /// Temporary: WarpDriver stores an absolute anchor position in its model state to detect
-    /// stuck agents. Goes away once that anchor is kept as an accumulated displacement.
-    Point position() const { return _agent.position; }
-
 private:
     /// The segments as relative ones. Lazy range, no copies.
     auto relative(Geometry2D::LineSegmentRange segments) const

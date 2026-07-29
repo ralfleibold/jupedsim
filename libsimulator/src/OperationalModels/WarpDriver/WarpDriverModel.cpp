@@ -435,8 +435,8 @@ Point WarpDriverModel::ComputeNextState(
         // so applying it reset that state; replicate that reset.
         nextData.orientation = orient;
         nextData.stuckTime = 0.0;
-        nextData.anchorX = 0.0;
-        nextData.anchorY = 0.0;
+        nextData.displacementX = 0.0;
+        nextData.displacementY = 0.0;
         nextData.detourTime = 0.0;
         nextData.detourSide = 1;
         return Point{0.0, 0.0};
@@ -648,12 +648,11 @@ Point WarpDriverModel::ComputeNextState(
         finalSpeed = agentData.v0;
     }
 
-    // Stuck detection: measure net displacement from an anchor position over a
-    // time window. Catches oscillating agents that periodically spike above the
-    // speed threshold but make no real progress.
+    // Stuck detection: accumulate the movement since the last reset over a time window.
+    // Catches oscillating agents that periodically spike above the speed threshold but make
+    // no real progress.
     double stuckTime = agentData.stuckTime;
-    double anchorX = agentData.anchorX;
-    double anchorY = agentData.anchorY;
+    Point displacement{agentData.displacementX, agentData.displacementY};
     double detourTime = agentData.detourTime;
     int detourSide = agentData.detourSide;
 
@@ -677,36 +676,37 @@ Point WarpDriverModel::ComputeNextState(
                 detourDir = desiredDir;
             }
         }
+        displacement += movement;
         if(detourTime <= 0.0) {
             detourTime = 0.0;
             stuckTime = 0.0;
-            const Point newPos = step.position() + movement;
-            anchorX = newPos.x;
-            anchorY = newPos.y;
+            // FIXME: this drops the displacement *including* this step's movement, while the
+            // progress reset below drops it *excluding* it. The two resets therefore disagree
+            // by one step, so the progress window starts later after a detour than after
+            // normal progress. Kept as it was to keep the behaviour unchanged.
+            displacement = Point{};
         }
         nextData.orientation = detourDir;
         nextData.stuckTime = stuckTime;
-        nextData.anchorX = anchorX;
-        nextData.anchorY = anchorY;
+        nextData.displacementX = displacement.x;
+        nextData.displacementY = displacement.y;
         nextData.detourTime = detourTime;
         nextData.detourSide = detourSide;
         return movement;
     }
 
-    // Measure net displacement from anchor over the stuck window
+    // Measure the accumulated displacement over the stuck window
     constexpr double stuckThreshold = 5.0; // seconds before triggering detour
     constexpr double detourDuration = 1.0; // seconds of lateral movement
-    constexpr double progressRadius = 0.3; // must move this far from anchor to count as progress
+    constexpr double progressRadius = 0.3; // must move this far to count as progress
 
     stuckTime += step.dt();
-    const double netDisplacement =
-        std::hypot(step.position().x - anchorX, step.position().y - anchorY);
+    const double netDisplacement = displacement.Norm();
 
     if(netDisplacement > progressRadius) {
-        // Real progress — reset anchor to current position
+        // Real progress — start measuring again from where the agent stands now
         stuckTime = 0.0;
-        anchorX = step.position().x;
-        anchorY = step.position().y;
+        displacement = Point{};
     } else if(stuckTime >= stuckThreshold) {
         // Stuck: no net progress for stuckThreshold seconds — enter detour
         std::uniform_int_distribution<int> sideDist(0, 1);
@@ -726,11 +726,13 @@ Point WarpDriverModel::ComputeNextState(
 
     Point newOrient = (smoothedVel.Norm() > 1e-9) ? smoothedVel.Normalized() : orient;
 
+    const Point movement = smoothedVel * step.dt();
+
     nextData.orientation = newOrient;
     nextData.stuckTime = stuckTime;
-    nextData.anchorX = anchorX;
-    nextData.anchorY = anchorY;
+    nextData.displacementX = displacement.x + movement.x;
+    nextData.displacementY = displacement.y + movement.y;
     nextData.detourTime = detourTime;
     nextData.detourSide = detourSide;
-    return smoothedVel * step.dt();
+    return movement;
 }
