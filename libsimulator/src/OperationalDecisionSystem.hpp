@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
 
+#include "AgentView.hpp"
 #include "EnvironmentQuery.hpp"
 #include "GenericAgent.hpp"
 #include "OperationalModel.hpp"
@@ -39,17 +40,13 @@ public:
         _next.clear();
         std::copy(std::begin(agents), std::end(agents), std::back_inserter(_next));
         for(size_t index = 0; index < agents.size(); ++index) {
+            const auto& current = agents[index];
             auto& next = _next[index];
-            // `next` starts as a copy of the current agent, so its Location holds the
-            // pre-step (x,y) and cached face -- the straight walk starts from there.
-            const bool hasLocation = next.location.has_value();
-            const Point before = hasLocation ? next.location->xy() : Point{};
-            _model->ComputeNextState(dT, agents[index], _next[index], envQuery);
-            if(hasLocation) {
-                // Advance the Location by the model's xy change.
-                // Basically we redo the walk on 3D mesh. This will get the real movement later,
-                // so that this part gets removed.
-                next.location->move_on_surface(next.position - before);
+            const AgentStep step{envQuery, current, dT};
+            const Point movement = _model->ComputeNextState(current.model, next.model, step);
+            next.position += movement;
+            if(next.location.has_value()) {
+                next.location->move_on_surface(movement);
             }
         }
         // Swap in the computed generation. This is safe because no caller retains
@@ -65,6 +62,6 @@ public:
         const Geometry2D& geometry) const
     {
         const EnvironmentQuery envQuery{geometry, neighborhoodSearch};
-        _model->CheckModelConstraint(agent, envQuery);
+        _model->CheckModelConstraint(agent, AgentView{envQuery, agent});
     }
 };

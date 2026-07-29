@@ -37,6 +37,6 @@ void init_agent(py::module_& m)
             "next_target", [](const GenericAgent& agent) { return intoTuple(agent.nextTarget); })
         .def_property_readonly(
             "model",
-            [](GenericAgent& agent) -> auto& { return agent.model; },
+            [](GenericAgent& agent) -> OperationalModelStateVariant& { return agent.model; },
             py::return_value_policy::reference);
 }

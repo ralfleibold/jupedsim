@@ -24,6 +24,27 @@
 class Journey;
 class BaseStage;
 
+using OperationalModelStateVariant = std::variant<
+    GeneralizedCentrifugalForceModel::State,
+    CollisionFreeSpeedModel::State,
+    CollisionFreeSpeedModelV2::State,
+    CollisionFreeSpeedModelV3::State,
+    AnticipationVelocityModel::State,
+    SocialForceModel::State,
+    WarpDriverModel::State,
+    CustomModel::State>;
+
+/// We need this extra class to be able to forward-declare. Otherwise we run
+/// into a circular dependency.
+struct OperationalModelState : OperationalModelStateVariant {
+    using OperationalModelStateVariant::variant;
+
+    OperationalModelState(OperationalModelStateVariant state)
+        : OperationalModelStateVariant(std::move(state))
+    {
+    }
+};
+
 struct GenericAgent {
     using ID = jps::UniqueID<GenericAgent>;
     ID id{};
@@ -37,16 +58,7 @@ struct GenericAgent {
     Point nextTarget{};
     Point finalTarget{};
 
-    using ModelState = std::variant<
-        GeneralizedCentrifugalForceModel::State,
-        CollisionFreeSpeedModel::State,
-        CollisionFreeSpeedModelV2::State,
-        CollisionFreeSpeedModelV3::State,
-        AnticipationVelocityModel::State,
-        SocialForceModel::State,
-        WarpDriverModel::State,
-        CustomModel::State>;
-    ModelState model{};
+    OperationalModelState model{};
 
     /// The agent's on-surface Location (optional during the 2D->3D migration).
     /// Invariant: `location->xy() == position` after every pipeline stage.
@@ -57,7 +69,7 @@ struct GenericAgent {
         jps::UniqueID<Journey> journeyId_,
         jps::UniqueID<BaseStage> stageId_,
         Point position_,
-        ModelState model_)
+        OperationalModelState model_)
         : id(id_ != ID::Invalid ? id_ : ID{})
         , journeyId(journeyId_)
         , stageId(stageId_)
@@ -71,7 +83,7 @@ struct GenericAgent {
 /// Maps agent model data to the operational model type it belongs to. Kept
 /// exhaustive on purpose: adding a model type will not compile until the
 /// mapping is extended.
-inline OperationalModelType ModelTypeOf(const GenericAgent::ModelState& model)
+inline OperationalModelType ModelTypeOf(const OperationalModelState& model)
 {
     return std::visit(
         overloaded{

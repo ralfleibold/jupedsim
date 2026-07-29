@@ -12,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-class EnvironmentQuery;
+struct NeighborView;
 
 class WarpDriverModel : public OperationalModel
 {
@@ -85,14 +85,12 @@ public:
 
     OperationalModelType Type() const override;
 
-    void ComputeNextState(
-        double dT,
-        const GenericAgent& current,
-        GenericAgent& next,
-        const EnvironmentQuery& envQuery) const override;
+    Point ComputeNextState(
+        const OperationalModelState& current,
+        OperationalModelState& next,
+        const AgentStep& step) const override;
 
-    void CheckModelConstraint(const GenericAgent& agent, const EnvironmentQuery& envQuery)
-        const override;
+    void CheckModelConstraint(const GenericAgent& agent, const AgentView& view) const override;
 };
 
 template <>

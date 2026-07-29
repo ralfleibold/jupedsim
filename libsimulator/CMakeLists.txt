@@ -9,6 +9,7 @@ target_sources(simulator PRIVATE
     src/AABB.cpp
     src/AABB.hpp
     src/AgentRemovalSystem.hpp
+    src/AgentView.hpp
     src/CfgCgal.hpp
     src/Ellipse.cpp
     src/Ellipse.hpp
@@ -109,9 +110,9 @@ target_include_directories(simulator PUBLIC
 if (BUILD_TESTS)
     add_executable(libsimulator-tests
         test/TestAABB.cpp
+        test/TestAgentView.cpp
         test/TestBasicPrimitiveTests.cpp
         test/TestCustomModel.cpp
-        test/TestEnvironmentQuery.cpp
         test/TestGenericAgentFormatter.cpp
         test/TestGeometry2D.cpp
         test/TestGeometry3D.cpp

@@ -50,10 +50,7 @@ from jupedsim.models.collision_free_speed_v3 import (
     CollisionFreeSpeedModelV3,
     CollisionFreeSpeedModelV3State,
 )
-from jupedsim.models.custom_model import (
-    CustomModelAgentState,
-    CustomOperationalModel,
-)
+from jupedsim.models.custom_model import CustomOperationalModel
 from jupedsim.models.generalized_centrifugal_force import (
     GeneralizedCentrifugalForceModel,
     GeneralizedCentrifugalForceModelState,
@@ -66,7 +63,6 @@ from jupedsim.models.warp_driver import (
     WarpDriverModel,
     WarpDriverModelState,
 )
-from jupedsim.neighborhood import NeighborhoodSearch
 from jupedsim.recording import Recording, RecordingAgent, RecordingFrame
 from jupedsim.routing import RoutingEngine
 from jupedsim.serialization import TrajectoryWriter
@@ -120,7 +116,6 @@ __all__ = [
     "CollisionFreeSpeedModelV2State",
     "CollisionFreeSpeedModelV3",
     "CollisionFreeSpeedModelV3State",
-    "CustomModelAgentState",
     "CustomOperationalModel",
     "ExitStage",
     "GeneralizedCentrifugalForceModel",
@@ -131,7 +126,6 @@ __all__ = [
     "JourneyDescription",
     "LineSegment",
     "NegativeValueError",
-    "NeighborhoodSearch",
     "NotifiableQueueStage",
     "OverlappingCirclesError",
     "Recording",

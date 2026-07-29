@@ -12,7 +12,7 @@
 #include <random>
 #include <vector>
 
-class EnvironmentQuery;
+struct NeighborView;
 
 class AnticipationVelocityModel : public OperationalModel
 {
@@ -42,22 +42,21 @@ public:
     AnticipationVelocityModel(double pushoutStrength, uint64_t rng_seed);
     ~AnticipationVelocityModel() override = default;
     OperationalModelType Type() const override;
-    void ComputeNextState(
-        double dT,
-        const GenericAgent& current,
-        GenericAgent& next,
-        const EnvironmentQuery& envQuery) const override;
-    void CheckModelConstraint(const GenericAgent& agent, const EnvironmentQuery& envQuery)
-        const override;
+    Point ComputeNextState(
+        const OperationalModelState& current,
+        OperationalModelState& next,
+        const AgentStep& step) const override;
+    void CheckModelConstraint(const GenericAgent& agent, const AgentView& view) const override;
 
 private:
-    double OptimalSpeed(const GenericAgent& ped, double spacing, double time_gap) const;
+    double OptimalSpeed(const State& self, double spacing, double time_gap) const;
     Point CalculateInfluenceDirection(
         const Point& desiredDirection,
         const Point& predictedDirection) const;
     double
-    GetSpacing(const GenericAgent& ped1, const GenericAgent& ped2, const Point& direction) const;
-    Point NeighborRepulsion(const GenericAgent& ped1, const GenericAgent& ped2) const;
+    GetSpacing(const State& self, const NeighborView& neighbor, const Point& direction) const;
+    Point
+    NeighborRepulsion(const State& self, Point toNextTarget, const NeighborView& neighbor) const;
 
     Point HandleWallAvoidance(
         const Point& direction,
@@ -67,8 +66,11 @@ private:
         double wallBufferDistance,
         double pushoutStrength) const;
 
-    Point
-    UpdateDirection(const GenericAgent& ped, const Point& calculatedDirection, double dt) const;
+    Point UpdateDirection(
+        const State& self,
+        Point toNextTarget,
+        const Point& calculatedDirection,
+        double dt) const;
 };
 
 template <>

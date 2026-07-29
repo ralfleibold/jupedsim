@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-#include "EnvironmentQuery.hpp"
+#include "AgentView.hpp"
 #include "GenericAgent.hpp"
 #include "Geometry/Geometry3D.hpp"
 #include "GeometryBuilder.hpp"
@@ -22,17 +22,16 @@ struct ConstantVelocity {
 class ConstantVelocityModel : public CustomModel
 {
 public:
-    void ComputeNextState(
-        double dT,
-        const GenericAgent& current,
-        GenericAgent& next,
-        const EnvironmentQuery&) const override
+    Point ComputeNextState(
+        const OperationalModelState& current,
+        OperationalModelState&,
+        const AgentStep& step) const override
     {
-        const auto& cur = std::get<CustomModel::State>(current.model);
-        next.position = current.position + cur.Get<ConstantVelocity>().velocity * dT;
+        const auto& cur = std::get<CustomModel::State>(current);
+        return cur.Get<ConstantVelocity>().velocity * step.dt();
     }
 
-    void CheckModelConstraint(const GenericAgent&, const EnvironmentQuery&) const override {}
+    void CheckModelConstraint(const GenericAgent&, const AgentView&) const override {}
 };
 
 GenericAgent make_agent(Point start, Point velocity)

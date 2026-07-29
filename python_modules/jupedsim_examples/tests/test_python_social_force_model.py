@@ -25,7 +25,7 @@ def _add_agent(sim, journey_id, stage_id, position, velocity=(0.0, 0.0)):
         journey_id=journey_id,
         stage_id=stage_id,
         position=position,
-        state=PythonSocialForceModelState(position=position, velocity=velocity),
+        state=PythonSocialForceModelState(velocity=velocity),
     )
 
 
@@ -65,9 +65,7 @@ def test_single_agent_reaches_exit(corridor_simulation):
             break
         sim.iterate()
 
-    assert sim.agent_count() == 0, (
-        "Agent should reach the exit within 2000 steps"
-    )
+    assert sim.agent_count() == 0, "Agent should reach the exit within 2000 steps"
 
 
 def test_multiple_agents_all_reach_exit(corridor_simulation):
@@ -129,9 +127,7 @@ def test_custom_desired_speed_affects_movement():
         journey_id=journey_id,
         stage_id=exit_id,
         position=(2.0, 8.0),
-        state=PythonSocialForceModelState(
-            position=(2.0, 8.0), velocity=(0.0, 0.0), desired_speed=0.5
-        ),
+        state=PythonSocialForceModelState(velocity=(0.0, 0.0), desired_speed=0.5),
     )
 
     # Fast agent
@@ -139,9 +135,7 @@ def test_custom_desired_speed_affects_movement():
         journey_id=journey_id,
         stage_id=exit_id,
         position=(2.0, 12.0),
-        state=PythonSocialForceModelState(
-            position=(2.0, 12.0), velocity=(0.0, 0.0), desired_speed=2.0
-        ),
+        state=PythonSocialForceModelState(velocity=(0.0, 0.0), desired_speed=2.0),
     )
 
     for _ in range(100):
@@ -185,7 +179,6 @@ def test_per_agent_state_survives_iterations(corridor_simulation):
         stage_id=exit_id,
         position=(2.0, 10.0),
         state=PythonSocialForceModelState(
-            position=(2.0, 10.0),
             velocity=(0.0, 0.0),
             desired_speed=2.0,
             reaction_time=0.25,
@@ -199,4 +192,3 @@ def test_per_agent_state_survives_iterations(corridor_simulation):
     assert isinstance(state, PythonSocialForceModelState)
     assert state.desired_speed == 2.0
     assert state.reaction_time == 0.25
-    assert state.position == pytest.approx(sim.agent(agent_id).position)

@@ -1005,12 +1005,12 @@ def test_anticipation_velocity_model_can_not_add_agent_too_close_to_wall(
 
 @dataclasses.dataclass(frozen=True)
 class _MinimalCustomState:
-    position: tuple[float, float]
+    marker: int = 0
 
 
 class _MinimalCustomModel(jps.CustomOperationalModel):
-    def compute_next_state(self, dt, ped, env_query):
-        return _MinimalCustomState(position=ped.position)
+    def compute_next_state(self, state, step):
+        return dataclasses.replace(state), (0.0, 0.0)
 
 
 def test_add_agent_rejects_state_of_different_model_on_custom_simulation():
@@ -1049,39 +1049,31 @@ def test_add_agent_rejects_custom_state_on_builtin_model_simulation():
             journey_id=journey_id,
             stage_id=exit_id,
             position=(0, 0),
-            state=_MinimalCustomState(position=(0, 0)),
+            state=_MinimalCustomState(),
         )
 
 
-def test_add_agent_rejects_object_without_position():
-    simulation = jps.Simulation(
-        model=jps.SocialForceModel(),
-        geometry=[(-50, -50), (50, -50), (50, 50), (-50, 50)],
-    )
-    exit_id = simulation.add_exit_stage([(49, -3), (49, 3), (50, 3), (50, -3)])
-    journey_id = simulation.add_journey(jps.JourneyDescription([exit_id]))
-
-    with pytest.raises(TypeError, match="CustomModelAgentState"):
-        simulation.add_agent(
-            journey_id=journey_id,
-            stage_id=exit_id,
-            position=(0, 0),
-            state=object(),
-        )
+class _NoPairModel(jps.CustomOperationalModel):
+    def compute_next_state(self, state, step):
+        return dataclasses.replace(state)
 
 
-class _NoPositionState:
-    pass
+class _WrongMovementTypeModel(jps.CustomOperationalModel):
+    def compute_next_state(self, state, step):
+        return dataclasses.replace(state), "not-a-tuple"
 
 
-class _NoPositionModel(jps.CustomOperationalModel):
-    def compute_next_state(self, dt, ped, env_query):
-        return _NoPositionState()
+class _SameStateModel(jps.CustomOperationalModel):
+    def compute_next_state(self, state, step):
+        return state, (0.0, 0.0)
 
 
-class _WrongPositionTypeModel(jps.CustomOperationalModel):
-    def compute_next_state(self, dt, ped, env_query):
-        return _MinimalCustomState(position="not-a-tuple")
+class _ConstantMovementModel(jps.CustomOperationalModel):
+    def __init__(self, movement):
+        self._movement = movement
+
+    def compute_next_state(self, state, step):
+        return dataclasses.replace(state), self._movement
 
 
 def _custom_model_simulation_with_agent(model):
@@ -1095,29 +1087,12 @@ def _custom_model_simulation_with_agent(model):
         journey_id=journey_id,
         stage_id=exit_id,
         position=(0, 0),
-        state=_MinimalCustomState(position=(0, 0)),
+        state=_MinimalCustomState(),
     )
     return simulation
 
 
-def test_add_agent_rejects_custom_state_position_contradicting_the_argument():
-    simulation = jps.Simulation(
-        model=_MinimalCustomModel(),
-        geometry=[(-50, -50), (50, -50), (50, 50), (-50, 50)],
-    )
-    exit_id = simulation.add_exit_stage([(49, -3), (49, 3), (50, 3), (50, -3)])
-    journey_id = simulation.add_journey(jps.JourneyDescription([exit_id]))
-
-    with pytest.raises(ValueError, match="Conflicting spawn positions"):
-        simulation.add_agent(
-            journey_id=journey_id,
-            stage_id=exit_id,
-            position=(5, 5),
-            state=_MinimalCustomState(position=(0, 0)),
-        )
-
-
-def test_add_agent_accepts_custom_state_position_matching_the_argument():
+def test_add_agent_spawns_the_agent_where_add_agent_says():
     simulation = jps.Simulation(
         model=_MinimalCustomModel(),
         geometry=[(-50, -50), (50, -50), (50, 50), (-50, 50)],
@@ -1129,30 +1104,59 @@ def test_add_agent_accepts_custom_state_position_matching_the_argument():
         journey_id=journey_id,
         stage_id=exit_id,
         position=(5.0, 5.0),
-        state=_MinimalCustomState(position=(5, 5)),
+        state=_MinimalCustomState(),
     )
 
     assert simulation.agent(agent_id).position == (5.0, 5.0)
 
 
-def test_custom_model_update_missing_position_names_source():
-    simulation = _custom_model_simulation_with_agent(_NoPositionModel())
+def test_custom_model_update_without_movement_names_source():
+    simulation = _custom_model_simulation_with_agent(_NoPairModel())
 
     with pytest.raises(
         jps.SimulationError,
-        match=r"State returned by compute_next_state\(\) is missing the 'position' attribute",
+        match=r"compute_next_state\(\) must return a \(state, movement\) pair",
     ):
         simulation.iterate()
 
 
-def test_custom_model_update_wrong_position_type_names_source():
-    simulation = _custom_model_simulation_with_agent(_WrongPositionTypeModel())
+def test_custom_model_update_wrong_movement_type_names_source():
+    simulation = _custom_model_simulation_with_agent(_WrongMovementTypeModel())
 
     with pytest.raises(
         jps.SimulationError,
-        match=r"State returned by compute_next_state\(\) has attribute 'position' of wrong type",
+        match=r"Movement returned by compute_next_state\(\) is of wrong type",
     ):
         simulation.iterate()
+
+
+def test_custom_model_update_returning_the_current_state_is_rejected():
+    simulation = _custom_model_simulation_with_agent(_SameStateModel())
+
+    with pytest.raises(
+        jps.SimulationError,
+        match="Current and updated model state are the same instance",
+    ):
+        simulation.iterate()
+
+
+def test_custom_model_movement_is_applied_as_given():
+    simulation = jps.Simulation(
+        model=_ConstantMovementModel((0.25, -0.5)),
+        geometry=[(-50, -50), (50, -50), (50, 50), (-50, 50)],
+    )
+    exit_id = simulation.add_exit_stage([(49, -3), (49, 3), (50, 3), (50, -3)])
+    journey_id = simulation.add_journey(jps.JourneyDescription([exit_id]))
+    agent_id = simulation.add_agent(
+        journey_id=journey_id,
+        stage_id=exit_id,
+        position=(0.0, 0.0),
+        state=_MinimalCustomState(),
+    )
+
+    simulation.iterate()
+
+    assert simulation.agent(agent_id).position == (0.25, -0.5)
 
 
 class _AddAgentDuringIterateModel(jps.CustomOperationalModel):
@@ -1164,17 +1168,17 @@ class _AddAgentDuringIterateModel(jps.CustomOperationalModel):
         self.stage_id = None
         self.error = None
 
-    def compute_next_state(self, dt, ped, env_query):
+    def compute_next_state(self, state, step):
         try:
             self.simulation.add_agent(
                 journey_id=self.journey_id,
                 stage_id=self.stage_id,
                 position=(5, 5),
-                state=_MinimalCustomState(position=(5, 5)),
+                state=_MinimalCustomState(),
             )
         except Exception as e:
             self.error = e
-        return _MinimalCustomState(position=ped.position)
+        return dataclasses.replace(state), (0.0, 0.0)
 
 
 def test_add_agent_during_iterate_raises_simulation_error():
@@ -1192,7 +1196,7 @@ def test_add_agent_during_iterate_raises_simulation_error():
         journey_id=journey_id,
         stage_id=exit_id,
         position=(0, 0),
-        state=_MinimalCustomState(position=(0, 0)),
+        state=_MinimalCustomState(),
     )
 
     simulation.iterate()

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-#include "EnvironmentQuery.hpp"
+#include "AgentView.hpp"
 #include "GenericAgent.hpp"
 #include "GeometryBuilder.hpp"
 #include "OperationalDecisionSystem.hpp"
@@ -35,26 +35,25 @@ struct ConstCharPointerToStringPayload {
 class MinimalCustomModel : public CustomModel
 {
 public:
-    void ComputeNextState(
-        double dT,
-        const GenericAgent& current,
-        GenericAgent& next,
-        const EnvironmentQuery&) const override
+    Point ComputeNextState(
+        const OperationalModelState& current,
+        OperationalModelState& next,
+        const AgentStep& step) const override
     {
-        const auto& currentModelData = std::get<CustomModel::State>(current.model);
+        const auto& currentModelData = std::get<CustomModel::State>(current);
         const auto& state = currentModelData.Get<MinimalState>();
-        auto& nextModelData = std::get<CustomModel::State>(next.model);
+        auto& nextModelData = std::get<CustomModel::State>(next);
         auto& nextState = nextModelData.Get<MinimalState>();
 
-        next.position = current.position + state.velocity * dT;
         nextState.velocity = state.velocity;
         nextState.applications = state.applications + 1;
+        return state.velocity * step.dt();
     }
 
-    void CheckModelConstraint(const GenericAgent&, const EnvironmentQuery&) const override {}
+    void CheckModelConstraint(const GenericAgent&, const AgentView&) const override {}
 };
 
-GenericAgent MakeAgent(GenericAgent::ModelState model, Point position = {})
+GenericAgent MakeAgent(OperationalModelState model, Point position = {})
 {
     return GenericAgent(
         GenericAgent::ID::Invalid,
@@ -130,27 +129,27 @@ TEST(CustomModel, RunsThroughOperationalDecisionSystem)
 TEST(ModelTypeOf, MapsEveryAgentModelDataToItsOperationalModelType)
 {
     ASSERT_EQ(
-        ModelTypeOf(GenericAgent::ModelState{GeneralizedCentrifugalForceModel::State{}}),
+        ModelTypeOf(OperationalModelState{GeneralizedCentrifugalForceModel::State{}}),
         OperationalModelType::GENERALIZED_CENTRIFUGAL_FORCE);
     ASSERT_EQ(
-        ModelTypeOf(GenericAgent::ModelState{CollisionFreeSpeedModel::State{}}),
+        ModelTypeOf(OperationalModelState{CollisionFreeSpeedModel::State{}}),
         OperationalModelType::COLLISION_FREE_SPEED);
     ASSERT_EQ(
-        ModelTypeOf(GenericAgent::ModelState{CollisionFreeSpeedModelV2::State{}}),
+        ModelTypeOf(OperationalModelState{CollisionFreeSpeedModelV2::State{}}),
         OperationalModelType::COLLISION_FREE_SPEED_V2);
     ASSERT_EQ(
-        ModelTypeOf(GenericAgent::ModelState{CollisionFreeSpeedModelV3::State{}}),
+        ModelTypeOf(OperationalModelState{CollisionFreeSpeedModelV3::State{}}),
         OperationalModelType::COLLISION_FREE_SPEED_V3);
     ASSERT_EQ(
-        ModelTypeOf(GenericAgent::ModelState{AnticipationVelocityModel::State{}}),
+        ModelTypeOf(OperationalModelState{AnticipationVelocityModel::State{}}),
         OperationalModelType::ANTICIPATION_VELOCITY_MODEL);
     ASSERT_EQ(
-        ModelTypeOf(GenericAgent::ModelState{SocialForceModel::State{}}),
+        ModelTypeOf(OperationalModelState{SocialForceModel::State{}}),
         OperationalModelType::SOCIAL_FORCE);
     ASSERT_EQ(
-        ModelTypeOf(GenericAgent::ModelState{WarpDriverModel::State{}}),
+        ModelTypeOf(OperationalModelState{WarpDriverModel::State{}}),
         OperationalModelType::WARP_DRIVER);
     ASSERT_EQ(
-        ModelTypeOf(GenericAgent::ModelState{CustomModel::State{MinimalState{}}}),
+        ModelTypeOf(OperationalModelState{CustomModel::State{MinimalState{}}}),
         OperationalModelType::CUSTOM_MODEL);
 }

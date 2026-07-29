@@ -14,8 +14,6 @@
 #include <ranges>
 #include <vector>
 
-using OperationalModelState = GenericAgent::ModelState;
-
 class EnvironmentQuery
 {
     const Geometry2D& _geometry;
@@ -28,34 +26,23 @@ public:
     }
 
     struct AcceptAll {
-        bool operator()(const Point&) const { return true; }
+        bool operator()(const GenericAgent&) const { return true; }
     };
 
-    // Returns all agents within 'radius' of 'agent', excluding 'agent' itself.
-    // An optional predicate 'filter' further filters the result; it is never called
-    // with 'agent'. Example:
-    //   query.OtherAgentsInRange(agent, r, [&envQuery, from = agent.position](const Point& to) {
-    //   return envQuery.NoGeometryBetween(from, to);})
-    template <std::predicate<const Point&> Pred = AcceptAll>
-    std::vector<GenericAgent>
-    OtherAgentsInRange(const GenericAgent& agent, double radius, Pred filter = {}) const
+    /// Calls 'fn' for every agent within 'radius' of 'from'.
+    template <std::invocable<const GenericAgent&> Fn>
+    void for_each_agent_in_range(const Point& from, double radius, Fn fn) const
     {
-        std::vector<GenericAgent> neighbors{};
-        _nsearch.for_each_in_range(agent.position, radius, [&](const GenericAgent& candidate) {
-            if(candidate.id != agent.id && filter(candidate.position)) {
-                neighbors.push_back(candidate);
-            }
-        });
-        return neighbors;
+        _nsearch.for_each_in_range(from, radius, fn);
     }
 
-    template <std::predicate<const Point&> Pred = AcceptAll>
+    template <std::predicate<const GenericAgent&> Pred = AcceptAll>
     std::vector<GenericAgent>
     AgentsInRange(const Point& from, double radius, Pred filter = {}) const
     {
         std::vector<GenericAgent> neighbors{};
-        _nsearch.for_each_in_range(from, radius, [&](const GenericAgent& candidate) {
-            if(filter(candidate.position)) {
+        for_each_agent_in_range(from, radius, [&](const GenericAgent& candidate) {
+            if(filter(candidate)) {
                 neighbors.push_back(candidate);
             }
         });

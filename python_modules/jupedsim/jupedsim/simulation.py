@@ -26,10 +26,7 @@ from jupedsim.models.collision_free_speed_v3 import (
     CollisionFreeSpeedModelV3,
     CollisionFreeSpeedModelV3State,
 )
-from jupedsim.models.custom_model import (
-    CustomModelAgentState,
-    CustomOperationalModel,
-)
+from jupedsim.models.custom_model import CustomOperationalModel
 from jupedsim.models.generalized_centrifugal_force import (
     GeneralizedCentrifugalForceModel,
     GeneralizedCentrifugalForceModelState,
@@ -59,20 +56,6 @@ _STATE_TYPES = (
     SocialForceModelState,
     WarpDriverModelState,
 )
-
-
-def _positions_contradict(position, state_position) -> bool:
-    """True when both are usable ``(x, y)`` pairs and they differ.
-
-    Anything not comparable as a coordinate pair is passed through: type
-    validation belongs to the simulation, which reports it with context.
-    """
-    try:
-        given = (float(position[0]), float(position[1]))
-        in_state = (float(state_position[0]), float(state_position[1]))
-    except (TypeError, ValueError, IndexError, KeyError):
-        return False
-    return given != in_state
 
 
 class Simulation:
@@ -293,7 +276,7 @@ class Simulation:
             | AnticipationVelocityModelState
             | SocialForceModelState
             | WarpDriverModelState
-            | CustomModelAgentState
+            | Any
         ),
     ) -> int:
         """Add an agent to the simulation.
@@ -306,10 +289,9 @@ class Simulation:
             state: Initial per-agent model state. For built-in models this is
                 the matching ``XModelState`` instance, e.g.
                 :class:`~jupedsim.CollisionFreeSpeedModelState`. For custom
-                models this is your own object satisfying
-                :class:`~jupedsim.CustomModelAgentState`, i.e. exposing a
-                ``position`` attribute that the model updates each step. The
-                state type has to match the model used in this simulation. When
+                models this is your own object, of whatever type your
+                :class:`~jupedsim.CustomOperationalModel` expects. The state
+                type has to match the model used in this simulation. When
                 adding agents with invalid parameters, or too close to the
                 boundary or other agents, this will cause an error.
 
@@ -323,27 +305,11 @@ class Simulation:
                 position=position,
                 state=state,
             )
-        if isinstance(state, CustomModelAgentState):
-            # Temporary Check for consistency. Right now Python model states still
-            # need a 'position' attribute. This will be removed later during
-            # refactoring.
-            if _positions_contradict(position, state.position):
-                raise ValueError(
-                    f"Conflicting spawn positions: add_agent(position={tuple(position)}) "
-                    f"but state.position is {tuple(state.position)}. The agent spawns at "
-                    "the position given to add_agent; make the state agree with it."
-                )
-            return self._obj.add_agent(
-                journey_id=journey_id,
-                stage_id=stage_id,
-                position=position,
-                state=py_jps._CustomModelState(state),
-            )
-        raise TypeError(
-            "state must be one of the built-in model states "
-            f"({', '.join(t.__name__ for t in _STATE_TYPES)}) or an object "
-            "satisfying CustomModelAgentState (exposing a 'position' "
-            f"attribute), got {type(state).__name__}"
+        return self._obj.add_agent(
+            journey_id=journey_id,
+            stage_id=stage_id,
+            position=position,
+            state=py_jps._CustomModelState(state),
         )
 
     def mark_agent_for_removal(self, agent_id: int):
