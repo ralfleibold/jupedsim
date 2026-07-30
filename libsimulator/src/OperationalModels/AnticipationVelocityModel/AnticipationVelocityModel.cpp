@@ -4,7 +4,6 @@
 #include "AgentView.hpp"
 #include "GenericAgent.hpp"
 #include "GeometricFunctions.hpp"
-#include "LineSegment.hpp"
 #include "Macros.hpp"
 #include "OperationalModel.hpp"
 #include "OperationalModelType.hpp"
@@ -272,28 +271,20 @@ Point AnticipationVelocityModel::HandleWallAvoidance(
     const double criticalWallDistance = wallBufferDistance + agentRadius;
 
     Point modifiedDirection = direction;
-    std::for_each(
-        std::begin(boundary),
-        std::end(boundary),
-        [&criticalWallDistance, &modifiedDirection, pushoutStrength](const LineSegment& wall) {
-            const auto closestPoint = wall.ShortestPoint(Point{});
+    for(const auto& wall : boundary) {
+        if(wall.distance > criticalWallDistance) {
+            continue;
+        }
 
-            const auto distanceVector = Point{} - closestPoint;
-            const auto [distance, normalTowardAgent] = distanceVector.NormAndNormalized();
+        const auto dotProduct = modifiedDirection.ScalarProduct(wall.normal);
 
-            if(distance > criticalWallDistance) {
-                return;
-            }
-
-            const auto dotProduct = modifiedDirection.ScalarProduct(normalTowardAgent);
-
-            if(dotProduct < 0) {
-                // Direction points into wall - need to project it out
-                // Remove the component pointing into the wall
-                const auto projectedDirection = modifiedDirection - normalTowardAgent * dotProduct;
-                modifiedDirection = projectedDirection + normalTowardAgent * pushoutStrength;
-            }
-        });
+        if(dotProduct < 0) {
+            // Direction points into wall - need to project it out
+            // Remove the component pointing into the wall
+            const auto projectedDirection = modifiedDirection - wall.normal * dotProduct;
+            modifiedDirection = projectedDirection + wall.normal * pushoutStrength;
+        }
+    }
 
     // Renormalize to maintain speed
     const auto finalDirection = modifiedDirection.Normalized();

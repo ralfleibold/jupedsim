@@ -3,6 +3,7 @@
 
 #include "EnvironmentQuery.hpp"
 #include "GenericAgent.hpp"
+#include "LineSegment.hpp"
 #include "Point.hpp"
 
 #include <concepts>
@@ -14,6 +15,20 @@
 struct NeighborView {
     Point relative_position;
     const OperationalModelState* state;
+};
+
+/// A wall segment as seen from the agent that asked for it. It carries what agents typically
+/// use/compute to avoid repetitions plus harmonizes computation.
+struct WallView {
+    /// The segment itself, relative to the agent.
+    LineSegment segment;
+    /// The point on the segment closest to the agent.
+    Point closest_point;
+    /// Distance to that point.
+    double distance;
+    /// Unit vector pointing from the wall towards the agent, i.e. the direction a repulsion
+    /// acts in. Zero for an agent standing exactly on the wall, where no direction exists.
+    Point normal;
 };
 
 /// What an agent perceives of its surroundings, expressed relative to where it
@@ -60,27 +75,36 @@ public:
     }
 
 private:
-    /// The segments as relative ones. Lazy range, no copies.
+    /// The segments as seen from the agent. Lazy range, no copies.
     /// Must stay above walls_nearby() and walls_in_range() in code: an 'auto' return type is
     /// deduced from the body, so unlike other members this one cannot be called before it is
     /// defined.
-    auto relative(Geometry2D::LineSegmentRange segments) const
+    auto as_seen_from_agent(Geometry2D::LineSegmentRange segments) const
     {
         return segments | std::views::transform([origin = _agent.position](const LineSegment& s) {
-                   return LineSegment{s.p1 - origin, s.p2 - origin};
+                   const LineSegment segment{s.p1 - origin, s.p2 - origin};
+                   const Point closest_point = segment.ShortestPoint(Point{});
+                   return WallView{
+                       .segment = segment,
+                       .closest_point = closest_point,
+                       .distance = closest_point.Norm(),
+                       .normal = (Point{} - closest_point).Normalized()};
                });
     }
 
 public:
-    /// Wall segments in the grid cells around the agent, relative to it. The returned segments
-    /// depend on the underlying grid cell size.
+    /// Walls in the grid cells around the agent. Which ones are returned depends on the
+    /// underlying grid cell size.
     /// Returned as lazy range.
-    auto walls_nearby() const { return relative(_world.LineSegmentsInRange(_agent.position)); }
+    auto walls_nearby() const
+    {
+        return as_seen_from_agent(_world.LineSegmentsInRange(_agent.position));
+    }
 
-    /// Wall segments within 'distance' of the agent, relative to it. Returns lazy range.
+    /// Walls within 'distance' of the agent. Returns lazy range.
     auto walls_in_range(double distance) const
     {
-        return relative(_world.LineSegmentsInRange(_agent.position, distance));
+        return as_seen_from_agent(_world.LineSegmentsInRange(_agent.position, distance));
     }
 
 protected:

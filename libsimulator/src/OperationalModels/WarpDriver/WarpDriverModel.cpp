@@ -623,21 +623,14 @@ Point WarpDriverModel::ComputeNextState(
     newVelWorld = newVelWorld + repulsion;
 
     // Boundary avoidance: steer agents away from walls
-    const auto& walls = step.walls_nearby();
-    for(const auto& wall : walls) {
-        const Point wallVec = wall.p2 - wall.p1;
-        const double wallLen2 = wallVec.ScalarProduct(wallVec);
-        if(wallLen2 < 1e-12) {
+    for(const auto& wall : step.walls_nearby()) {
+        if(wall.segment.LengthSquare() < 1e-12) {
             continue; // degenerate wall segment
         }
-        const Point toAgent = Point{} - wall.p1;
-        const double t = std::clamp(toAgent.ScalarProduct(wallVec) / wallLen2, 0.0, 1.0);
-        const Point closest = wall.p1 + wallVec * t;
-        const Point diff = Point{} - closest;
-        const double dist = diff.Norm();
-        if(dist < agentData.radius * 3.0 && dist > 1e-6) {
-            const double steering = agentData.v0 * (agentData.radius * 3.0 - dist) / dist;
-            newVelWorld = newVelWorld + diff.Normalized() * steering;
+        const double reach = agentData.radius * 3.0;
+        if(wall.distance < reach && wall.distance > 1e-6) {
+            const double steering = agentData.v0 * (reach - wall.distance) / wall.distance;
+            newVelWorld = newVelWorld + wall.normal * steering;
         }
     }
 

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
 
-#include "LineSegment.hpp"
 #include "OperationalModel.hpp"
 #include "OperationalModelType.hpp"
 #include "Point.hpp"
@@ -13,6 +12,7 @@
 #include <vector>
 
 struct NeighborView;
+struct WallView;
 
 class AnticipationVelocityModel : public OperationalModel
 {

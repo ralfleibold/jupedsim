@@ -4,7 +4,6 @@
 #include "AgentView.hpp"
 #include "GenericAgent.hpp"
 #include "GeometricFunctions.hpp"
-#include "LineSegment.hpp"
 #include "OperationalModel.hpp"
 #include "OperationalModelType.hpp"
 #include "Point.hpp"
@@ -149,14 +148,10 @@ Point CollisionFreeSpeedModel::NeighborRepulsion(const State& self, const Neighb
            -(this->strengthNeighborRepulsion * exp((l - distance) / this->rangeNeighborRepulsion));
 }
 
-Point CollisionFreeSpeedModel::BoundaryRepulsion(
-    const State& self,
-    const LineSegment& boundary_segment) const
+Point CollisionFreeSpeedModel::BoundaryRepulsion(const State& self, const WallView& boundary) const
 {
-    const auto dist_vec = boundary_segment.ShortestPoint(Point{});
-    const auto [dist, e_iw] = dist_vec.NormAndNormalized();
     const auto l = self.radius;
     const auto R_iw =
-        -this->strengthGeometryRepulsion * exp((l - dist) / this->rangeGeometryRepulsion);
-    return e_iw * R_iw;
+        -strengthGeometryRepulsion * exp((l - boundary.distance) / rangeGeometryRepulsion);
+    return -boundary.normal * R_iw; // The repulsion points away from the agent
 }

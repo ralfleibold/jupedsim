@@ -4,7 +4,6 @@
 #include "AgentView.hpp"
 #include "GenericAgent.hpp"
 #include "GeometricFunctions.hpp"
-#include "LineSegment.hpp"
 #include "OperationalModel.hpp"
 #include "OperationalModelType.hpp"
 #include "Point.hpp"
@@ -205,14 +204,11 @@ double CollisionFreeSpeedModelV3::GetSpacing(
     return distp12.Norm() - l;
 }
 
-Point CollisionFreeSpeedModelV3::BoundaryRepulsion(
-    const State& self,
-    const LineSegment& boundary_segment) const
+Point CollisionFreeSpeedModelV3::BoundaryRepulsion(const State& self, const WallView& boundary)
+    const
 {
-    const auto dist_vec = boundary_segment.ShortestPoint(Point{});
-    const auto [dist, e_iw] = dist_vec.NormAndNormalized();
     const auto l = self.radius;
-    const auto R_iw =
-        -self.strengthGeometryRepulsion * std::exp((l - dist) / self.rangeGeometryRepulsion);
-    return e_iw * R_iw;
+    const auto R_iw = -self.strengthGeometryRepulsion *
+                      std::exp((l - boundary.distance) / self.rangeGeometryRepulsion);
+    return -boundary.normal * R_iw; // The repulsion points away from the agent
 }

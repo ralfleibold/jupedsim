@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
 
-#include "LineSegment.hpp"
 #include "OperationalModel.hpp"
 #include "OperationalModelType.hpp"
 #include "Point.hpp"
@@ -9,6 +8,7 @@
 #include <fmt/core.h>
 
 struct NeighborView;
+struct WallView;
 
 class SocialForceModel : public OperationalModel
 {
@@ -61,7 +61,7 @@ private:
      * @param segment reference to line segment, from which the force originates
      * @return vector with the repulsive force
      */
-    Point ObstacleForce(const State& self, const LineSegment& segment) const;
+    Point ObstacleForce(const State& self, const WallView& wall) const;
     /**
      * calculates the pushing and friction forces along <separation>
      * @param separation vector pointing from where the force originates to where it acts

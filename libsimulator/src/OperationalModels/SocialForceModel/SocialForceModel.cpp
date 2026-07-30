@@ -3,7 +3,6 @@
 
 #include "AgentView.hpp"
 #include "GenericAgent.hpp"
-#include "LineSegment.hpp"
 #include "OperationalModel.hpp"
 #include "OperationalModelType.hpp"
 #include "Point.hpp"
@@ -128,11 +127,10 @@ Point SocialForceModel::AgentForce(const State& self, const NeighborView& neighb
         this->friction);
 };
 
-Point SocialForceModel::ObstacleForce(const State& self, const LineSegment& segment) const
+Point SocialForceModel::ObstacleForce(const State& self, const WallView& wall) const
 {
-    const Point pt = segment.ShortestPoint(Point{});
     return ForceFromSeparation(
-        -pt,
+        -wall.closest_point,
         self.obstacleScale,
         self.forceDistance,
         self.radius,

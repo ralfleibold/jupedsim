@@ -283,24 +283,23 @@ Point GeneralizedCentrifugalForceModel::ForceRepPed(const State& self, const Nei
 }
 
 inline Point
-GeneralizedCentrifugalForceModel::ForceRepWall(const State& self, const LineSegment& w) const
+GeneralizedCentrifugalForceModel::ForceRepWall(const State& self, const WallView& wall) const
 {
     Point F = Point(0.0, 0.0);
-    Point pt = w.ShortestPoint(Point{});
-    double wlen = w.LengthSquare();
+    const auto& w = wall.segment;
 
-    if(wlen < 0.01) { // ignore walls smaller than 10 cm
+    if(w.LengthSquare() < 0.01) { // ignore walls smaller than 10 cm
         return F;
     }
     // Kraft soll nur orthgonal wirken
     // ???
-    if(fabs((w.p1 - w.p2).ScalarProduct(Point{} - pt)) > J_EPS) {
+    if(fabs((w.p1 - w.p2).ScalarProduct(Point{} - wall.closest_point)) > J_EPS) {
         return F;
     }
     double mind = 0.5; // for performance reasons this distance is assumed to be constant
     double vn =
         w.NormalComp(self.orientation * self.speed); // normal component of the velocity on the wall
-    F = ForceRepStatPoint(self, pt, mind, vn);
+    F = ForceRepStatPoint(self, wall.closest_point, mind, vn);
 
     return F; // line --> l != 0
 }

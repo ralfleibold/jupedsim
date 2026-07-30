@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "AgentView.hpp"
 #include "EnvironmentQuery.hpp"
-#include "LineSegment.hpp"
 #include "OperationalModels/CustomModel/CustomModel.hpp"
 #include "conversion.hpp"
 #include "python_model.hpp"
@@ -28,6 +27,12 @@ void init_agent_view(py::module_& m)
             return py::cast(state);
         });
 
+    py::class_<WallView>(m, "WallView")
+        .def_readonly("segment", &WallView::segment)
+        .def_readonly("closest_point", &WallView::closest_point)
+        .def_readonly("distance", &WallView::distance)
+        .def_readonly("normal", &WallView::normal);
+
     py::class_<AgentView>(m, "AgentView")
         .def(
             "other_agents_in_range",
@@ -47,14 +52,14 @@ void init_agent_view(py::module_& m)
         .def(
             "walls_nearby",
             [](const AgentView& self) { return intoVec(self.walls_nearby()); },
-            "Geometry segments in the grid cells around the agent, relative to it.")
+            "Walls in the grid cells around the agent, as seen from it.")
         .def(
             "walls_in_range",
             [](const AgentView& self, double distance) {
                 return intoVec(self.walls_in_range(distance));
             },
             py::arg("distance"),
-            "Geometry segments within exact distance of the agent, relative to it.");
+            "Walls within exact distance of the agent, as seen from it.");
 
     py::class_<AgentStep, AgentView>(m, "AgentStep")
         .def_property_readonly("dt", &AgentStep::dt)
