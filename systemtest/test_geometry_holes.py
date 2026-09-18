@@ -14,7 +14,7 @@ def test_geometry_holes_returns_coordinates():
     )
     geo = simulation.get_geometry()
 
-    holes = geo.holes()
+    holes = geo.get_flat_surface().holes()
     assert holes is not None
     assert len(holes) == 1
     assert len(holes[0]) >= 4

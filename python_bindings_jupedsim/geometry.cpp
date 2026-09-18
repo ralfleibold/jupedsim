@@ -29,25 +29,22 @@ std::vector<Point> ring_of(const Poly& ring)
     }
     return out;
 }
-
-/// The polygon a geometry was lifted from.
-///
-/// A mesh-built world has none, and it is not merely missing: the outline of a surface is a
-/// bundle of loops per region, and saying which of them is "the" boundary and which are holes
-/// is a question of its own.
-const PolyWithHoles& polygon_of(const Geometry& geo)
-{
-    const auto* poly = geo.polygon();
-    if(poly == nullptr) {
-        throw SimulationError(
-            "This geometry was built from a surface mesh, which has no polygon underneath.");
-    }
-    return *poly;
-}
 } // namespace
 
 void init_geometry(py::module_& m)
 {
+    py::class_<PolyWithHoles>(m, "FlatSurface")
+        .def(
+            "boundary",
+            [](const PolyWithHoles& p) { return intoTuples(ring_of(p.outer_boundary())); })
+        .def("holes", [](const PolyWithHoles& p) {
+            std::vector<std::vector<std::tuple<double, double>>> res{};
+            for(const auto& hole : p.holes()) {
+                res.emplace_back(intoTuples(ring_of(hole)));
+            }
+            return res;
+        });
+
     // smart_holder: a Simulation shares ownership of its geometry with Python.
     py::class_<Geometry, py::smart_holder>(m, "Geometry")
         .def_static(
@@ -86,17 +83,9 @@ void init_geometry(py::module_& m)
         .def("vertices", &Geometry::vertices)
         .def("triangles", &Geometry::triangles)
         .def(
-            "boundary",
-            [](const Geometry& geo) {
-                return intoTuples(ring_of(polygon_of(geo).outer_boundary()));
-            })
-        .def("holes", [](const Geometry& geo) {
-            std::vector<std::vector<std::tuple<double, double>>> res{};
-            for(const auto& hole : polygon_of(geo).holes()) {
-                res.emplace_back(intoTuples(ring_of(hole)));
-            }
-            return res;
-        });
+            "get_flat_surface",
+            &Geometry::polygon,
+            "flat_surface or None if geometry does not contain exactly one region");
 
     py::class_<GeometryBuilder>(m, "GeometryBuilder")
         .def(py::init<>())
@@ -110,7 +99,5 @@ void init_geometry(py::module_& m)
             [](GeometryBuilder& builder, const std::vector<std::tuple<double, double>>& points) {
                 builder.ExcludeFromAccessibleArea(intoPoints(points));
             })
-        .def("build", [](GeometryBuilder& builder) {
-            return std::make_unique<Geometry>(builder.Build());
-        });
+        .def("build", [](GeometryBuilder& builder) { return builder.Build(); });
 }

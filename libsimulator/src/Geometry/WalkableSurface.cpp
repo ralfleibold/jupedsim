@@ -94,8 +94,7 @@ PolyWithHoles as_2d_poly_with_holes(
         oriented_poly(rings[0], CGAL::COUNTERCLOCKWISE), std::begin(holes), std::end(holes));
 }
 
-WalkableSurface::SeamEdge
-find_seam_edge(const PolyWithHoles& poly, const Point2D& a, const Point2D& b)
+Geometry::SeamEdge find_seam_edge(const PolyWithHoles& poly, const Point2D& a, const Point2D& b)
 {
     const auto find_in_ring = [&a, &b](const Poly& ring) -> std::optional<size_t> {
         for(size_t index = 0; index < ring.size(); ++index) {
@@ -158,6 +157,38 @@ size_t WalkableSurface::AddRegion(Polygon polygon, double height)
     }
 
     const PolyWithHoles polyWithHoles = as_2d_poly_with_holes(polygons, vertices);
+    return insert_region(std::move(polygons), vertices, polyWithHoles, height);
+}
+
+size_t WalkableSurface::AddRegion(const PolyWithHoles& polygon, double height)
+{
+    std::vector<Point3D> vertices{};
+    std::vector<std::vector<size_t>> polygons{};
+
+    auto convert_ring = [&vertices, &polygons, height](const Poly& ring) {
+        std::vector<size_t> converted_ring{};
+        converted_ring.reserve(ring.size());
+        for(const Point2D& p : ring.container()) {
+            converted_ring.push_back(vertices.size());
+            vertices.push_back({p.x(), p.y(), height});
+        }
+        polygons.emplace_back(std::move(converted_ring));
+    };
+
+    convert_ring(polygon.outer_boundary());
+    for(const Poly& hole : polygon.holes()) {
+        convert_ring(hole);
+    }
+
+    return insert_region(std::move(polygons), vertices, polygon, height);
+}
+
+size_t WalkableSurface::insert_region(
+    std::vector<std::vector<size_t>> polygons,
+    const std::vector<Point3D>& vertices,
+    const PolyWithHoles& polyWithHoles,
+    double height)
+{
     // CGAL's is_valid_polygon_with_holes() allows that boundary and holes touch at vertices:
     // Check whether all vertices are unique.
     std::set<Point2D> points{};
@@ -277,17 +308,17 @@ size_t WalkableSurface::ConnectRegions(
     return connectorRegion;
 }
 
-WalkableSurface::RegionGraph2D WalkableSurface::CreateRegionGraph2D() const
+std::unique_ptr<WalkableSurface::RegionGraph2D> WalkableSurface::CreateRegionGraph2D() const
 {
     const auto as_point_2d = [this](size_t vertexID) {
         const Point3D& v = _globalVertices[vertexID];
         return Point2D(v[0], v[1]);
     };
 
-    RegionGraph2D graph{};
+    auto graph = std::make_unique<RegionGraph2D>();
     // Add vertices.
     for(const auto regionID : boost::make_iterator_range(boost::vertices(_regionGraph))) {
-        boost::add_vertex(_regionGraph[regionID].polyWithHoles, graph);
+        boost::add_vertex(_regionGraph[regionID].polyWithHoles, *graph);
     }
 
     // Add seams.
@@ -297,8 +328,8 @@ WalkableSurface::RegionGraph2D WalkableSurface::CreateRegionGraph2D() const
         const Seam& seam = _regionGraph[edge];
         const Point2D a = as_point_2d(seam[0]);
         const Point2D b = as_point_2d(seam[1]);
-        boost::add_edge(from, to, find_seam_edge(graph[from], a, b), graph);
-        boost::add_edge(to, from, find_seam_edge(graph[to], a, b), graph);
+        boost::add_edge(from, to, find_seam_edge((*graph)[from], a, b), *graph);
+        boost::add_edge(to, from, find_seam_edge((*graph)[to], a, b), *graph);
     }
 
     return graph;
@@ -366,5 +397,8 @@ std::unique_ptr<Geometry> WalkableSurface::CreateGeometry()
     NormaliseAndValidateMesh(mesh, &region_split.region);
 
     return std::make_unique<Geometry>(
-        std::move(mesh), std::move(region_split), PassKey<WalkableSurface>{});
+        std::move(mesh),
+        std::move(region_split),
+        CreateRegionGraph2D(),
+        PassKey<WalkableSurface>{});
 }

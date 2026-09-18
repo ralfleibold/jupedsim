@@ -7,7 +7,7 @@ deserialize different forms of input / output commonly used.
 
 import abc
 
-import jupedsim.native as py_jps
+from jupedsim.geometry_utils import as_wkt
 
 
 class TrajectoryWriter(metaclass=abc.ABCMeta):
@@ -65,12 +65,13 @@ def walkable_area_as_wkt(simulation) -> str:
         TrajectoryWriter.Exception: if the simulation was built from a surface
             mesh.
     """
-    try:
-        return simulation.get_geometry().as_wkt()
-    except py_jps.SimulationError as e:
+    flat_surface = simulation.get_geometry().get_flat_surface()
+    if flat_surface is None:
         raise TrajectoryWriter.Exception(
-            "Cannot write trajectories for a simulation built from a surface "
-            "mesh: the trajectory formats JuPedSim ships are 2D, and so are "
-            "the tools reading them. Build the simulation from a polygon, or "
+            "Cannot write trajectories for a simulation with a geometry "
+            "containing multiple regions or built from a surface "
+            "mesh: the trajectory formats JuPedSim ships is 2D so far."
+            "Build the simulation from a polygon, or "
             "pass a trajectory_writer of your own."
-        ) from e
+        )
+    return as_wkt(flat_surface)
