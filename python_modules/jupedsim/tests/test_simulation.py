@@ -32,8 +32,7 @@ def test_a_string_naming_an_obj_file_is_a_mesh_not_a_wkt():
 def test_a_mesh_built_simulation_has_no_polygon_to_hand_out():
     # The geometry is handed out either way; asking it for a polygon boundary is what fails.
     sim = mesh_simulation()
-    with pytest.raises(jps.SimulationError, match="surface mesh"):
-        sim.get_geometry().boundary()
+    assert sim.get_geometry().polygon() is None
 
 
 def polygon_simulation():
@@ -45,7 +44,7 @@ def polygon_simulation():
 
 
 def test_polygon_input_still_builds_a_polygon_world():
-    assert polygon_simulation().get_geometry().boundary()
+    assert polygon_simulation().get_geometry().polygon().boundary()
 
 
 def test_a_polygon_world_is_one_floor_at_height_zero():

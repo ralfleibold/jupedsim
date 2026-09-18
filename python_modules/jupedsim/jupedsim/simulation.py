@@ -8,8 +8,7 @@ import shapely
 
 import jupedsim.native as py_jps
 from jupedsim.agent import Agent
-from jupedsim.geometry import Geometry
-from jupedsim.geometry_utils import build_geometry
+from jupedsim.geometry_utils import build_geometry, build_polygon
 from jupedsim.internal.tracing import Timer
 from jupedsim.journey import JourneyDescription
 from jupedsim.location import Location
@@ -107,6 +106,7 @@ class Simulation:
         geometry: (
             str
             | os.PathLike
+            | py_jps.WalkableSurface
             | shapely.GeometryCollection
             | shapely.Polygon
             | shapely.MultiPolygon
@@ -177,7 +177,7 @@ class Simulation:
         mesh = _as_geometry(geometry)
         self._obj = py_jps.Simulation(
             model=py_jps_model,
-            geometry=mesh if mesh else build_geometry(geometry)._obj,
+            geometry=mesh if mesh else build_geometry(geometry),
             dt=dt,
         )
         self._timer = Timer(self._obj, timer_log_level=timer_log_level)
@@ -269,8 +269,9 @@ class Simulation:
             Id of the added exit stage.
 
         """
-        exit_geometry = build_geometry(polygon)
-        return self._obj.add_exit_stage(exit_geometry.boundary(), z_hint)
+        return self._obj.add_exit_stage(
+            build_polygon(polygon).boundary(), z_hint
+        )
 
     def add_direct_steering_stage(self) -> int:
         """Add an direct steering stage to the simulation.
@@ -552,12 +553,10 @@ class Simulation:
             List of handles to all agents inside the given polygon.
 
         """
-        polygon_geometry = build_geometry(poly)
-
         return [
             Agent(self, agent_id)
             for agent_id in self._obj.agents_in_polygon(
-                polygon_geometry.boundary()
+                build_polygon(poly).boundary()
             )
         ]
 
@@ -588,17 +587,13 @@ class Simulation:
     def set_tracing(self, status: bool) -> None:
         self._obj.set_tracing(status)
 
-    def get_geometry(self) -> Geometry:
+    def get_geometry(self) -> py_jps.Geometry:
         """Current geometry of the simulation.
 
         Returns:
             The geometry of the simulation.
-
-        Raises:
-            SimulationError: if this simulation was built from a surface mesh.
-                A surface has no polygon underneath to hand out.
         """
-        return Geometry(self._obj.get_geometry())
+        return self._obj.get_geometry()
 
     @property
     def timer(self) -> Timer:
