@@ -3,6 +3,7 @@
 
 #include "GenericAgent.hpp"
 #include "Geometry/Geometry.hpp"
+#include "RoutingEngine.hpp"
 #include "SimulationError.hpp"
 #include "Stage.hpp"
 #include "StageDescription.hpp"
@@ -60,6 +61,7 @@ public:
         const StageDescription stageDescription,
         std::vector<GenericAgent::ID>& removedAgentsInLastIteration,
         const Geometry& geometry,
+        RoutingEngine& routingEngine,
         double z_hint)
     {
         std::unique_ptr<BaseStage> stage = std::visit(
@@ -69,11 +71,15 @@ public:
                         detail::locate_stage_point(geometry, d.position, "WayPoint", z_hint),
                         d.distance);
                 },
-                [&removedAgentsInLastIteration, &geometry, z_hint](
+                [&removedAgentsInLastIteration, &geometry, &routingEngine, z_hint](
                     const ExitDescription& d) -> std::unique_ptr<BaseStage> {
+                    const auto centroid =
+                        detail::locate_stage_point(geometry, d.polygon.Centroid(), "Exit", z_hint);
+                    const DestinationArea area{centroid.region(), d.polygon};
                     return std::make_unique<Exit>(
                         d.polygon,
-                        detail::locate_stage_point(geometry, d.polygon.Centroid(), "Exit", z_hint),
+                        centroid,
+                        routingEngine.AddDestination({&area, 1}),
                         removedAgentsInLastIteration);
                 },
                 [&geometry,

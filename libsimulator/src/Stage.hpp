@@ -9,6 +9,7 @@
 #include "NeighborhoodSearch.hpp"
 #include "Point.hpp"
 #include "Polygon.hpp"
+#include "RoutingTarget.hpp"
 #include "UniqueID.hpp"
 #include "Util.hpp"
 
@@ -113,7 +114,7 @@ protected:
 public:
     virtual ~BaseStage() = default;
     virtual bool IsCompleted(const GenericAgent& agent) = 0;
-    virtual Location Target(const GenericAgent& agent) = 0;
+    virtual RoutingTarget Target(const GenericAgent& agent) = 0;
     virtual StageProxy Proxy(Simulation* simulation_) = 0;
     ID Id() const { return id; }
     size_t CountTargeting() const { return targeting; }
@@ -146,7 +147,7 @@ public:
     Waypoint(Location position_, double distance_);
     ~Waypoint() override = default;
     bool IsCompleted(const GenericAgent& agent) override;
-    Location Target(const GenericAgent& agent) override;
+    RoutingTarget Target(const GenericAgent& agent) override;
     StageProxy Proxy(Simulation* simulation_) override;
     Point Position() const { return position.xy(); };
 };
@@ -156,13 +157,18 @@ class Exit : public BaseStage
 {
     Polygon area;
     Location centroid;
+    DestinationId destination;
     std::vector<GenericAgent::ID>& toRemove;
 
 public:
-    Exit(Polygon area, Location centroid_, std::vector<GenericAgent::ID>& toRemove_);
+    Exit(
+        Polygon area,
+        Location centroid_,
+        DestinationId destination_,
+        std::vector<GenericAgent::ID>& toRemove_);
     ~Exit() override = default;
     bool IsCompleted(const GenericAgent& agent) override;
-    Location Target(const GenericAgent& agent) override;
+    RoutingTarget Target(const GenericAgent& agent) override;
     StageProxy Proxy(Simulation* simulation_) override;
     Polygon Position() const { return area; };
 };
@@ -177,7 +183,7 @@ public:
     NotifiableWaitingSet(std::vector<Location> slots_);
     ~NotifiableWaitingSet() override = default;
     bool IsCompleted(const GenericAgent& agent) override;
-    Location Target(const GenericAgent& agent) override;
+    RoutingTarget Target(const GenericAgent& agent) override;
     StageProxy Proxy(Simulation* simulation_) override;
     void State(WaitingSetState s);
     WaitingSetState State() const;
@@ -198,7 +204,7 @@ public:
     NotifiableQueue(std::vector<Location> slots_);
     ~NotifiableQueue() override = default;
     bool IsCompleted(const GenericAgent& agent) override;
-    Location Target(const GenericAgent& agent) override;
+    RoutingTarget Target(const GenericAgent& agent) override;
     StageProxy Proxy(Simulation* simulation_) override;
     void Update(const EnvironmentQuery& envQuery);
     void Pop(size_t count);
@@ -212,7 +218,7 @@ public:
     DirectSteering() = default;
     ~DirectSteering() override = default;
     bool IsCompleted(const GenericAgent&) override { return false; };
-    Location Target(const GenericAgent& agent) override;
+    RoutingTarget Target(const GenericAgent& agent) override;
     StageProxy Proxy(Simulation* simulation) override
     {
         return DirectSteeringProxy(simulation, this);

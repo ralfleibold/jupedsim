@@ -146,7 +146,7 @@ class Agent:
         return Location(self.__resolve().location)
 
     @property
-    def final_target(self) -> tuple[float, float]:
+    def final_target(self) -> Location | None:
         """Current final target of the agent.
 
         Can be used to directly steer an agent towards the given coordinate.
@@ -168,9 +168,11 @@ class Agent:
         floor is meant; the tuple is located around the agent's own height.
 
         Returns:
-            Current final target of the agent, as ``(x, y)``.
+            Current final target of the agent, or ``None`` if its stage
+            is not a single location (e.g. an exit).
         """
-        return self.__resolve().final_target
+        target = self.__resolve().final_target
+        return Location(target) if target is not None else None
 
     @final_target.setter
     def final_target(

@@ -49,7 +49,7 @@ TEST_F(StagesTests, NotifiableWaitingSetTargetIsCorrect)
         GenericAgent agent = AgentAt(waitingPoints[i], waitingSet.Id());
         neighborhoodSearch.AddAgent(agent);
 
-        ASSERT_EQ(waitingSet.Target(agent).xy(), waitingPoints[i]);
+        ASSERT_EQ(std::get<Location>(waitingSet.Target(agent)).xy(), waitingPoints[i]);
         EnvironmentQuery envQuery(*geometry, neighborhoodSearch);
         waitingSet.Update(envQuery);
     }
@@ -58,7 +58,9 @@ TEST_F(StagesTests, NotifiableWaitingSetTargetIsCorrect)
     for(size_t i = 0; i < 2; ++i) {
         GenericAgent agentToLastWaitingSetPos = AgentAt(Point{}, waitingSet.Id());
         neighborhoodSearch.AddAgent(agentToLastWaitingSetPos);
-        ASSERT_EQ(waitingSet.Target(agentToLastWaitingSetPos).xy(), waitingPoints.back());
+        ASSERT_EQ(
+            std::get<Location>(waitingSet.Target(agentToLastWaitingSetPos)).xy(),
+            waitingPoints.back());
     }
 }
 
@@ -94,8 +96,8 @@ TEST_F(StagesOnTwoStoreys, PassingOverOrUnderAnExitDoesNotTakeIt)
 {
     std::vector<GenericAgent::ID> removed{};
     const Polygon area{std::vector<Point>{{4, 4}, {6, 4}, {6, 6}, {4, 6}}};
-    Exit lower(area, At({5, 5}, 0.0), removed);
-    Exit upper(area, At({5, 5}, 3.0), removed);
+    Exit lower(area, At({5, 5}, 0.0), DestinationId{}, removed);
+    Exit upper(area, At({5, 5}, 3.0), DestinationId{}, removed);
 
     EXPECT_FALSE(lower.IsCompleted(AgentAt({5, 5}, 3.0, lower.Id())));
     EXPECT_FALSE(upper.IsCompleted(AgentAt({5, 5}, 0.0, upper.Id())));
@@ -159,8 +161,8 @@ TEST_F(StagesOnTwoStoreys, TargetCarriesTheFloorItIsOn)
     Waypoint lower(At({5, 5}, 0.0), 1.0);
     const auto agent = AgentAt({1, 1}, 0.0, upper.Id());
 
-    EXPECT_DOUBLE_EQ(upper.Target(agent).z(), 3.0);
-    EXPECT_DOUBLE_EQ(lower.Target(agent).z(), 0.0);
+    EXPECT_DOUBLE_EQ(std::get<Location>(upper.Target(agent)).z(), 3.0);
+    EXPECT_DOUBLE_EQ(std::get<Location>(lower.Target(agent)).z(), 0.0);
 }
 
 TEST_F(StagesOnTwoStoreys, DirectSteeringHandsBackWhereTheAgentWasSteered)
@@ -170,8 +172,8 @@ TEST_F(StagesOnTwoStoreys, DirectSteeringHandsBackWhereTheAgentWasSteered)
     auto agent = AgentAt({1, 1}, 0.0, steering.Id());
     agent.finalTarget = At({5, 5}, 3.0);
 
-    EXPECT_EQ(steering.Target(agent).xy(), Point(5, 5));
-    EXPECT_DOUBLE_EQ(steering.Target(agent).z(), 3.0);
+    EXPECT_EQ(std::get<Location>(steering.Target(agent)).xy(), Point(5, 5));
+    EXPECT_DOUBLE_EQ(std::get<Location>(steering.Target(agent)).z(), 3.0);
 }
 
 TEST(StagesOnAStair, WaypointIsReachedFromTheStairItStandsOn)

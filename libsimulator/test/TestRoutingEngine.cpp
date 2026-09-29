@@ -4,6 +4,7 @@
 #include "RoutingEngine.hpp"
 #include "SimulationError.hpp"
 
+#include <fmt/core.h>
 #include <gtest/gtest.h>
 
 #include <vector>
@@ -32,4 +33,13 @@ TEST(RoutingEngine, ADestinationNeedsAnAreaInsideItsRegion)
     EXPECT_THROW(engine.AddDestination({}), SimulationError);
     const DestinationArea outside{0, Polygon{test_geometries::rectangle_points({20, 0}, {21, 1})}};
     EXPECT_THROW(engine.AddDestination({&outside, 1}), SimulationError);
+}
+
+TEST(RoutingTarget, Formats)
+{
+    const auto geometry = test_geometries::rectangle({0, 0}, {10, 2});
+    const RoutingTarget place = geometry->get_location(1, 2, 0).value();
+
+    EXPECT_EQ(fmt::format("{}", RoutingTarget{DestinationId{3}}), "destination 3");
+    EXPECT_EQ(fmt::format("{}", place), "(1, 2, 0, region=0)");
 }

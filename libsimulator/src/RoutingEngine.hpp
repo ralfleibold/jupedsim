@@ -5,23 +5,18 @@
 #include "Geometry/Location.hpp"
 #include "Point.hpp"
 #include "Polygon.hpp"
+#include "RoutingTarget.hpp"
 #include "SurfaceMeshShortestPathRoutingEngine.hpp"
 
 #include <cstddef>
 #include <span>
-#include <variant>
 #include <vector>
-
-/// A destination registered with `RoutingEngine::AddDestination`.
-enum class DestinationId : std::size_t {};
 
 /// One part of a destination: a polygon within a single region.
 struct DestinationArea {
     std::size_t region;
     Polygon polygon;
 };
-
-using RoutingTarget = std::variant<DestinationId, Location>;
 
 class RoutingEngine
 {

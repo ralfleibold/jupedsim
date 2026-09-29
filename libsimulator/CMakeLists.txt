@@ -52,6 +52,7 @@ target_sources(simulator PRIVATE
     src/Polygon.hpp
     src/RoutingEngine.cpp
     src/RoutingEngine.hpp
+    src/RoutingTarget.hpp
     src/Simulation.cpp
     src/Simulation.hpp
     src/SimulationClock.cpp

@@ -91,7 +91,7 @@ bool Waypoint::IsCompleted(const GenericAgent& agent)
     return agent.location.distance_to(position) <= distance;
 }
 
-Location Waypoint::Target(const GenericAgent&)
+RoutingTarget Waypoint::Target(const GenericAgent&)
 {
     return position;
 }
@@ -104,8 +104,12 @@ StageProxy Waypoint::Proxy(Simulation* simulation)
 ////////////////////////////////////////////////////////////////////////////////
 /// Exit
 ////////////////////////////////////////////////////////////////////////////////
-Exit::Exit(Polygon area_, Location centroid_, std::vector<GenericAgent::ID>& toRemove_)
-    : area(std::move(area_)), centroid(centroid_), toRemove(toRemove_)
+Exit::Exit(
+    Polygon area_,
+    Location centroid_,
+    DestinationId destination_,
+    std::vector<GenericAgent::ID>& toRemove_)
+    : area(std::move(area_)), centroid(centroid_), destination(destination_), toRemove(toRemove_)
 {
     if(!area.IsConvex()) {
         throw SimulationError("Exit areas need to be bounded by convex polygons.");
@@ -122,9 +126,9 @@ bool Exit::IsCompleted(const GenericAgent& agent)
     return hasReachedExit;
 }
 
-Location Exit::Target(const GenericAgent&)
+RoutingTarget Exit::Target(const GenericAgent&)
 {
-    return centroid;
+    return destination;
 }
 
 StageProxy Exit::Proxy(Simulation* simulation)
@@ -152,7 +156,7 @@ bool NotifiableWaitingSet::IsCompleted(const GenericAgent& agent)
     return agent.location.distance_to(slots[0]) <= 1;
 }
 
-Location NotifiableWaitingSet::Target(const GenericAgent& agent)
+RoutingTarget NotifiableWaitingSet::Target(const GenericAgent& agent)
 {
     if(state == WaitingSetState::Inactive) {
         return slots[0];
@@ -249,7 +253,7 @@ bool NotifiableQueue::IsCompleted(const GenericAgent& agent)
     return completed;
 }
 
-Location NotifiableQueue::Target(const GenericAgent& agent)
+RoutingTarget NotifiableQueue::Target(const GenericAgent& agent)
 {
 
     if(const auto index_opt = IndexInContainer(occupants, agent.id); index_opt) {
@@ -318,7 +322,7 @@ void NotifiableQueue::Update(const EnvironmentQuery& envQuery)
 ////////////////////////////////////////////////////////////////////////////////
 /// DirectSteering
 ////////////////////////////////////////////////////////////////////////////////
-Location DirectSteering::Target(const GenericAgent& agent)
+RoutingTarget DirectSteering::Target(const GenericAgent& agent)
 {
     return agent.finalTarget;
 }

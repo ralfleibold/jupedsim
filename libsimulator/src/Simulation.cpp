@@ -204,7 +204,7 @@ BaseStage::ID Simulation::AddStage(const StageDescription stageDescription, doub
     ThrowIfIterating("AddStage");
     JPS_SCOPED_TIMER_AND_TRACE(_timer, "Add Stage", Detailed);
     return _stageManager.AddStage(
-        stageDescription, _removedAgentsInLastIteration, *_geometry, z_hint);
+        stageDescription, _removedAgentsInLastIteration, *_geometry, *_routingEngine, z_hint);
 }
 
 GenericAgent::ID Simulation::AddAgent(
