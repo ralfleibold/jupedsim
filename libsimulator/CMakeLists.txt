@@ -50,6 +50,7 @@ target_sources(simulator PRIVATE
     src/Point.hpp
     src/Polygon.cpp
     src/Polygon.hpp
+    src/RoutingEngine.cpp
     src/RoutingEngine.hpp
     src/Simulation.cpp
     src/Simulation.hpp
@@ -124,6 +125,7 @@ if (BUILD_TESTS)
         test/TestSimulation.cpp
         test/TestSimulationClock.cpp
         test/TestStage.cpp
+        test/TestSurfaceMeshShortestPathRoutingEngine.cpp
         test/TestUniqueID.cpp
         test/TestValidation.cpp
         test/TestWalkableSurface.cpp
