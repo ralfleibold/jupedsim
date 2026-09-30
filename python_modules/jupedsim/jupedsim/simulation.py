@@ -185,7 +185,8 @@ class Simulation:
 
         Arguments:
             position: Position of the waypoint
-            distance: Minimum distance required to reach this waypoint
+            distance: Minimum distance required to reach this waypoint.
+                Must be positive.
             z_hint: Height the waypoint is meant to sit at. On stacked floors
                 this picks the one, see :func:`add_agent`.
 

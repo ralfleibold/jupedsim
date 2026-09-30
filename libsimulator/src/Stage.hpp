@@ -142,9 +142,10 @@ class Waypoint : public BaseStage
 {
     Location position;
     double distance;
+    DestinationId destination;
 
 public:
-    Waypoint(Location position_, double distance_);
+    Waypoint(Location position_, double distance_, DestinationId destination_);
     ~Waypoint() override = default;
     bool IsCompleted(const GenericAgent& agent) override;
     RoutingTarget Target(const GenericAgent& agent) override;

@@ -82,7 +82,8 @@ const std::vector<GenericAgent::ID>& NotifiableWaitingSetProxy::Waiting() const
 ////////////////////////////////////////////////////////////////////////////////
 /// Waypoint
 ////////////////////////////////////////////////////////////////////////////////
-Waypoint::Waypoint(Location position_, double distance_) : position(position_), distance(distance_)
+Waypoint::Waypoint(Location position_, double distance_, DestinationId destination_)
+    : position(position_), distance(distance_), destination(destination_)
 {
 }
 
@@ -93,7 +94,7 @@ bool Waypoint::IsCompleted(const GenericAgent& agent)
 
 RoutingTarget Waypoint::Target(const GenericAgent&)
 {
-    return position;
+    return destination;
 }
 
 StageProxy Waypoint::Proxy(Simulation* simulation)

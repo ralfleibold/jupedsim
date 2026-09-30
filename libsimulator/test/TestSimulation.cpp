@@ -97,15 +97,23 @@ TEST(MeshBuiltSimulation, AStageIsPutOnTheStoreyItsHintNames)
     const auto [up_journey, up_stage] = journey_to(*sim, Point{5, 6}, 3.0);
     const auto [down_journey, down_stage] = journey_to(*sim, Point{5, 6}, 0.0);
 
+    // Upstairs, the waypoint is only reached over the flight to the east.
     const auto id = sim->AddAgent(up_journey, up_stage, Point{2, 2}, State{}, 0.0);
     sim->Iterate();
-    // The waypoint of the journey the agent is on, so its target says which storey the stage
-    // was put on.
-    EXPECT_NEAR(std::get<Location>(sim->Agent(id).finalTarget).z(), 3.0, 1e-9);
+    EXPECT_GT(sim->Agent(id).routeOrientation.x, 0.9);
 
+    // Downstairs, it is in plain sight.
     sim->SwitchAgentJourney(id, down_journey, down_stage);
     sim->Iterate();
-    EXPECT_EQ(std::get<Location>(sim->Agent(id).finalTarget).z(), 0.0);
+    const Point straight = (Point{5, 6} - sim->Agent(id).location.xy()).Normalized();
+    EXPECT_NEAR(sim->Agent(id).routeOrientation.x, straight.x, 1e-6);
+    EXPECT_NEAR(sim->Agent(id).routeOrientation.y, straight.y, 1e-6);
+}
+
+TEST(Simulation, AWaypointNeedsAPositiveDistance)
+{
+    auto sim = on_a_flat_room();
+    EXPECT_THROW(sim->AddStage(WaypointDescription{{5, 5}, 0.0}), SimulationError);
 }
 
 TEST(MeshBuiltSimulation, ATargetWrittenFromOutsideLandsOnTheAgentsOwnStorey)

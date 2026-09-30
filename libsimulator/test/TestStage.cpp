@@ -86,7 +86,7 @@ public:
 
 TEST_F(StagesOnTwoStoreys, WaypointIsReachedOnlyFromItsOwnFloor)
 {
-    Waypoint waypoint(At({5, 5}, 3.0), 1.0);
+    Waypoint waypoint(At({5, 5}, 3.0), 1.0, DestinationId{});
 
     EXPECT_FALSE(waypoint.IsCompleted(AgentAt({5, 5}, 0.0, waypoint.Id())));
     EXPECT_TRUE(waypoint.IsCompleted(AgentAt({5, 5}, 3.0, waypoint.Id())));
@@ -155,16 +155,6 @@ TEST_F(StagesOnTwoStoreys, WaitingSetSeatsOnlyAgentsOnItsOwnFloor)
     EXPECT_EQ(waitingSet.Occupants().front(), agents[1].id);
 }
 
-TEST_F(StagesOnTwoStoreys, TargetCarriesTheFloorItIsOn)
-{
-    Waypoint upper(At({5, 5}, 3.0), 1.0);
-    Waypoint lower(At({5, 5}, 0.0), 1.0);
-    const auto agent = AgentAt({1, 1}, 0.0, upper.Id());
-
-    EXPECT_DOUBLE_EQ(std::get<Location>(upper.Target(agent)).z(), 3.0);
-    EXPECT_DOUBLE_EQ(std::get<Location>(lower.Target(agent)).z(), 0.0);
-}
-
 TEST_F(StagesOnTwoStoreys, DirectSteeringHandsBackWhereTheAgentWasSteered)
 {
     DirectSteering steering{};
@@ -181,7 +171,7 @@ TEST(StagesOnAStair, WaypointIsReachedFromTheStairItStandsOn)
     // A stair climbing 3 m over 5 m: an agent 0.8 m short of the waypoint in plan is
     // half a metre below it.
     const auto geometry = test_geometries::two_levels_with_stair();
-    Waypoint waypoint(*geometry->get_location(12.5, 2.0, 1.5), 1.0);
+    Waypoint waypoint(*geometry->get_location(12.5, 2.0, 1.5), 1.0, DestinationId{});
 
     const GenericAgent agent(
         GenericAgent::ID::Invalid,

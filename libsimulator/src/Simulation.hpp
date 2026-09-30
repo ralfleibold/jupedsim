@@ -69,7 +69,7 @@ public:
     void Iterate();
     Journey::ID AddJourney(const std::map<BaseStage::ID, TransitionDescription>& stages);
     /// @param z_hint "stage point" is the closest z on the surface related to @p z_hint
-    BaseStage::ID AddStage(const StageDescription stageDescription, double z_hint = 0.0);
+    BaseStage::ID AddStage(const StageDescription& stageDescription, double z_hint = 0.0);
     void MarkAgentForRemoval(GenericAgent::ID id);
     const std::vector<GenericAgent::ID>& RemovedAgents() const;
     size_t AgentCount() const;

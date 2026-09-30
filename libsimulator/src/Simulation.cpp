@@ -199,7 +199,7 @@ Journey::ID Simulation::AddJourney(const std::map<BaseStage::ID, TransitionDescr
     return id;
 }
 
-BaseStage::ID Simulation::AddStage(const StageDescription stageDescription, double z_hint)
+BaseStage::ID Simulation::AddStage(const StageDescription& stageDescription, double z_hint)
 {
     ThrowIfIterating("AddStage");
     JPS_SCOPED_TIMER_AND_TRACE(_timer, "Add Stage", Detailed);
