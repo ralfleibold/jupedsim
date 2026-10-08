@@ -188,7 +188,10 @@ void init_simulation(py::module_& m)
                 }
                 return agents;
             })
-        .def("get_stage_proxy", [](Simulation& sim, uint64_t id) { return sim.Stage(id); })
+        .def(
+            "get_stage",
+            [](Simulation& sim, uint64_t id) { return sim.Stage(id); },
+            py::return_value_policy::reference_internal)
         .def("set_tracing", [](Simulation& sim, bool status) { sim.SetTracing(status); })
         .def(
             "set_timer_log_level",

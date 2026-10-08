@@ -125,7 +125,7 @@ Journey::ID Simulation::AddJourney(const std::map<BaseStage::ID, TransitionDescr
     std::map<BaseStage::ID, JourneyNode> nodes;
     bool containsDirectSteering =
         std::find_if(std::begin(stages), std::end(stages), [this](auto const& pair) {
-            return std::holds_alternative<DirectSteeringProxy>(Stage(pair.first));
+            return dynamic_cast<const DirectSteering*>(Stage(pair.first)) != nullptr;
         }) != std::end(stages);
 
     if(containsDirectSteering && stages.size() > 1) {
@@ -390,9 +390,9 @@ OperationalModelType Simulation::ModelType() const
     return _operationalDecisionSystem.ModelType();
 }
 
-StageProxy Simulation::Stage(BaseStage::ID stageId)
+const BaseStage* Simulation::Stage(BaseStage::ID stageId) const
 {
-    return _stageManager.Stage(stageId)->Proxy(this);
+    return _stageManager.Stage(stageId);
 }
 const Geometry& Simulation::Geo() const
 {

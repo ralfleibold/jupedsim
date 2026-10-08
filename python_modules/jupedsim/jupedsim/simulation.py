@@ -529,11 +529,11 @@ class Simulation:
         Returns:
             The stage object.
         """
-        stage = self._obj.get_stage_proxy(stage_id)
+        stage = self._obj.get_stage(stage_id)
         match stage:
-            case py_jps.WaypointProxy():
+            case py_jps.WaypointStage():
                 return WaypointStage(stage)
-            case py_jps.ExitProxy():
+            case py_jps.ExitStage():
                 return ExitStage(stage)
             case _:
                 raise Exception(

@@ -10,8 +10,8 @@ namespace py = pybind11;
 
 void init_stage(py::module_& m)
 {
-    py::class_<WaypointProxy>(m, "WaypointProxy")
-        .def("count_targeting", &WaypointProxy::CountTargeting);
-    py::class_<ExitProxy>(m, "ExitProxy").def("count_targeting", &ExitProxy::CountTargeting);
-    py::class_<DirectSteeringProxy>(m, "DirectSteeringProxy");
+    py::class_<BaseStage>(m, "BaseStage").def("count_targeting", &BaseStage::CountTargeting);
+    py::class_<Waypoint, BaseStage>(m, "WaypointStage");
+    py::class_<Exit, BaseStage>(m, "ExitStage");
+    py::class_<DirectSteering>(m, "DirectSteeringStage");
 }
