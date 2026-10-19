@@ -4,12 +4,25 @@
 Six agents walk towards a waypoint with multiple areas and each targets the area closer
 to its start position. Down the stairs, use different point-based waypoints to split the
 agents and use an exit with multiple areas. Once again agents target the nearer one.
+
+The trajectory is written to ``example_3d.h5`` in the current working directory. Pass
+``--no-viewer`` to only write the file, without opening the viewer.
 """
 
+import argparse
+import pathlib
 from itertools import pairwise
 
 import jupedsim as jps
 from simulation_viewer import SimulationViewer
+
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--no-viewer",
+    action="store_true",
+    help="run until all agents left and only write the trajectory file",
+)
+args = parser.parse_args()
 
 GROUND_FLOOR = 0.0
 LANDING = 1.5
@@ -51,7 +64,13 @@ surface.connect_regions(
     to_edge=((8, 9), (8, 12)),
 )
 
-sim = jps.Simulation(model=jps.CollisionFreeSpeedModel(), geometry=surface)
+out = pathlib.Path("example_3d.h5")
+writer = jps.Hdf5TrajectoryWriter(output_file=out)
+sim = jps.Simulation(
+    model=jps.CollisionFreeSpeedModel(),
+    geometry=surface,
+    trajectory_writer=writer,
+)
 
 # An area on either side of the stairwell, close to the outer wall.
 upper_waypoint_id = sim.add_waypoint_stage(
@@ -109,5 +128,10 @@ def on_step(sim):
     pass
 
 
-viewer = SimulationViewer(sim, on_step=on_step)
-viewer.run()
+with writer:
+    if args.no_viewer:
+        while sim.agent_count() > 0 and sim.iteration_count() < 10000:
+            sim.iterate()
+    else:
+        SimulationViewer(sim, on_step=on_step).run()
+print(f"Wrote {out.resolve()} ({sim.iteration_count()} iterations)")
