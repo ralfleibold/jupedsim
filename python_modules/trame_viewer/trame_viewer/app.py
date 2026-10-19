@@ -1,6 +1,9 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 """3D viewer for a multi-level navigation mesh, via pyvista + trame.
 
+Shows either an OBJ mesh or an HDF5 trajectory file written by ``jps.Hdf5TrajectoryWriter``;
+the latter brings its own geometry and is played back.
+
 The 3D scene is rendered *offscreen* by VTK (server side) and shown either in the browser or
 in a native desktop window (``--native``, via pywebview's WebKitGTK).
 """
@@ -20,6 +23,8 @@ from dataclasses import dataclass
 # streamed to the client, never into an on-screen native window.
 os.environ.setdefault("PYVISTA_OFF_SCREEN", "true")
 
+import h5py  # noqa: E402
+import hdf5plugin  # noqa: E402, F401  registers the Zstd filter used by the writer
 import numpy as np  # noqa: E402
 import pyvista as pv  # noqa: E402
 from vtkmodules.vtkRenderingCore import vtkCellPicker  # noqa: E402
@@ -41,6 +46,19 @@ BOUNDARY_INDEX_VARIANTS = [
     ("naive", "Naive", jps.pyjupedsim.make_naive_boundary_index),
     ("portal", "Portal", jps.make_portal_boundary_index),
 ]
+
+TRAJECTORY_SUFFIXES = (".h5", ".hdf5")
+PLAYBACK_SPEEDS = [0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0]
+PLAYBACK_FPS = 30.0
+
+# Agents are drawn as upright cylinders standing on the floor (base at z=0).
+AGENT_CYLINDER = pv.Cylinder(
+    center=(0.0, 0.0, 0.5),
+    direction=(0.0, 0.0, 1.0),
+    radius=0.2,
+    height=1.0,
+    resolution=12,
+)
 
 
 @dataclass(frozen=True)
@@ -68,7 +86,7 @@ def find_free_port() -> int:
         return s.getsockname()[1]
 
 
-def build_app(obj_path: str | None):
+def build_app(obj_path: str | None, trajectory_path: str | None):
     """Build the trame server hosting a pyvista Plotter"""
     plotter = pv.Plotter()
     plotter.set_background("white")
@@ -96,7 +114,9 @@ def build_app(obj_path: str | None):
         False  # False -> colour by height, True -> by region id
     )
     state.mesh_name = ""
-    state.obj_file = None
+    state.input_file = None
+    # Pathfinding / Boundary Highlight need a jps.Geometry, which a trajectory file can't provide.
+    state.has_geometry = False
     state.n_points = 0
     state.n_cells = 0
     state.n_regions = 0
@@ -121,6 +141,14 @@ def build_app(obj_path: str | None):
     state.boundary_query = "—"  # query point of the highlighted result
     state.boundary_count = 0  # number of highlighted segments
     state.boundary_query_us = 0  # BoundaryIndex.query() solve time
+    # Trajectory playback (only with a trajectory file loaded).
+    state.has_trajectory = False
+    state.playing = False
+    state.frame = 0  # index into the recorded frames
+    state.n_frames = 0
+    state.frame_dt = 0.0  # simulated time between two recorded frames [s]
+    state.frame_agents = 0
+    state.playback_speed = 1.0
 
     # Holds the currently loaded geometry + mesh + its height range; swapped out by load_mesh().
     current: dict = {
@@ -143,6 +171,14 @@ def build_app(obj_path: str | None):
     # on its first query (users may never enter the mode / switch variants) and
     # cached per variant; all are dropped on mesh load.
     boundary: dict = {"indices": {}, "loc": None}
+    # Trajectory playback: all rows in memory, rows of frame i are
+    # data[offsets[i]:offsets[i + 1]].
+    playback: dict = {
+        "data": None,
+        "offsets": None,
+        "agents": None,  # glyph dataset, updated in place per frame
+        "task": None,  # running play loop
+    }
     engine = None  # Routing engine - populated in load_mesh()
     picker = vtkCellPicker()
     picker.SetTolerance(0.0005)
@@ -195,17 +231,51 @@ def build_app(obj_path: str | None):
                 scalar_bar_args=dict(title="Height z [m]"),
             )
         plotter.add_axes()
+        draw_agents()
 
-    def load_mesh(obj_path: str, name: str) -> None:
-        nonlocal engine
-        # Geometry is the single source of truth: the rendered vertices/faces
-        # and the region colouring are read from it, and the engine borrows the
-        # SAME instance, so routing, picking and region colouring all agree.
-        geo = jps.Geometry.from_obj(obj_path)
-        engine = jps.SurfaceMeshShortestPathRoutingEngine(geo)
+    def draw_agents() -> None:
+        data = playback["data"]
+        if data is None or state.n_frames == 0:
+            return
+        offsets = playback["offsets"]
+        frame = int(state.frame)
+        rows = data[offsets[frame] : offsets[frame + 1]]
+        lo, hi = (float(v) for v in state.clip_range)
+        rows = rows[(rows["z"] >= lo) & (rows["z"] <= hi)]
+        state.frame_agents = len(rows)
+        if len(rows) == 0:
+            plotter.remove_actor("agents", render=False)
+            playback["agents"] = None
+            return
+        pts = np.column_stack([rows["x"], rows["y"], rows["z"]]).astype(float)
+        glyphs = pv.PolyData(pts).glyph(
+            geom=AGENT_CYLINDER, orient=False, scale=False
+        )
+        # Update in place: copy_from is far cheaper than add_mesh's actor/mapper rebuild.
+        if playback["agents"] is None:
+            playback["agents"] = glyphs
+            plotter.add_mesh(
+                glyphs, name="agents", color="royalblue", pickable=False
+            )
+        else:
+            playback["agents"].copy_from(glyphs)
 
-        verts = np.asarray(geo.vertices(), dtype=float)
-        tris = np.asarray(geo.triangles(), dtype=np.int64)
+    def clear_trajectory() -> None:
+        playback.update(data=None, offsets=None, agents=None)
+        plotter.remove_actor("agents", render=False)
+        with state:
+            state.has_trajectory = False
+            state.playing = False
+            state.frame = 0
+            state.n_frames = 0
+            state.frame_agents = 0
+
+    def show_mesh(
+        verts, tris, face_region_ids, n_regions: int, name: str, geo
+    ) -> None:
+        """Show a new mesh; ``geo`` (or None) backs the interaction modes."""
+        verts = np.asarray(verts, dtype=float)
+        tris = np.asarray(tris, dtype=np.int64)
         # pyvista face stream: [3, i, j, k, 3, i, j, k, ...]
         faces = np.hstack(
             [np.full((len(tris), 1), 3, dtype=np.int64), tris]
@@ -214,8 +284,7 @@ def build_app(obj_path: str | None):
         mesh["elevation"] = verts[
             :, 2
         ]  # colour + clip by height (point scalar)
-        face_region_ids = np.asarray(geo.region_id_per_face(), dtype=float)
-        n_regions = int(geo.region_count())
+        face_region_ids = np.asarray(face_region_ids, dtype=float)
         if len(face_region_ids) == mesh.n_cells:
             mesh.cell_data["region"] = face_region_ids  # per-face region id
         else:  # face-count mismatch: disable region colouring rather than mislabel
@@ -242,7 +311,11 @@ def build_app(obj_path: str | None):
         boundary["indices"].clear()  # segment grids of the previous mesh
         for m in modes:
             m.reset()  # a new mesh invalidates every mode's picks/overlays
+        clear_trajectory()
         with state:
+            state.has_geometry = geo is not None
+            if geo is None:
+                state.interaction_mode = "none"
             state.z_min, state.z_max = z_min, z_max
             state.clip_range = [z_min, z_max]  # start showing the whole mesh
             state.clip_low, state.clip_high = z_min, z_max
@@ -255,6 +328,49 @@ def build_app(obj_path: str | None):
         plotter.view_isometric()
         if ctrl.view_update:
             ctrl.view_update()
+
+    def load_mesh(obj_path: str, name: str) -> None:
+        nonlocal engine
+        # Geometry is the single source of truth: the rendered vertices/faces
+        # and the region colouring are read from it, and the engine borrows the
+        # SAME instance, so routing, picking and region colouring all agree.
+        geo = jps.Geometry.from_obj(obj_path)
+        engine = jps.SurfaceMeshShortestPathRoutingEngine(geo)
+        show_mesh(
+            geo.vertices(),
+            geo.triangles(),
+            geo.region_id_per_face(),
+            int(geo.region_count()),
+            name,
+            geo,
+        )
+
+    def load_trajectory(path: str, name: str) -> None:
+        nonlocal engine
+        with h5py.File(path, "r") as hf:
+            verts = hf["mesh/vertices"][:]
+            tris = hf["mesh/triangles"][:]
+            face_region_ids = hf["mesh/regions"][:]
+            n_regions = len(hf["regions"])
+            data = hf["trajectory"][:]
+            offsets = hf["frame_offsets"][:]
+            frame_dt = float(hf.attrs["dt"]) * int(hf.attrs["every_nth_frame"])
+        engine = None
+        show_mesh(verts, tris, face_region_ids, n_regions, name, None)
+        playback.update(data=data, offsets=offsets)
+        with state:
+            state.has_trajectory = True
+            state.n_frames = max(len(offsets) - 1, 0)
+            state.frame_dt = frame_dt
+        draw_agents()
+        if ctrl.view_update:
+            ctrl.view_update()
+
+    def load_file(path: str, name: str) -> None:
+        if os.path.splitext(name)[1].lower() in TRAJECTORY_SUFFIXES:
+            load_trajectory(path, name)
+        else:
+            load_mesh(path, name)
 
     def _redraw() -> None:
         draw()
@@ -285,22 +401,73 @@ def build_app(obj_path: str | None):
         if band != [float(v) for v in state.clip_range]:
             state.clip_range = band  # reassign -> _on_range redraws
 
-    @state.change("obj_file")
-    def _on_file(obj_file, **_):
-        if not obj_file:
+    @state.change("input_file")
+    def _on_file(input_file, **_):
+        if not input_file:
             return
-        entry = obj_file[0] if isinstance(obj_file, (list, tuple)) else obj_file
+        entry = (
+            input_file[0]
+            if isinstance(input_file, (list, tuple))
+            else input_file
+        )
         client_file = ClientFile(entry)
         if client_file.is_empty:
             return
-        # pyvista picks the reader by extension, so the bytes need a real .obj file.
-        with tempfile.NamedTemporaryFile(suffix=".obj", delete=False) as tmp:
+        # The OBJ reader picks the format by extension, so keep the uploaded one.
+        suffix = os.path.splitext(client_file.name)[1]
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
             tmp.write(client_file.content)
             tmp_path = tmp.name
         try:
-            load_mesh(tmp_path, client_file.name)
+            load_file(tmp_path, client_file.name)
         finally:
             os.unlink(tmp_path)
+
+    # -- trajectory playback -------------------------------------------
+
+    @state.change("frame")
+    def _on_frame(**_):
+        if playback["data"] is None:
+            return
+        draw_agents()
+        if ctrl.view_update:
+            ctrl.view_update()
+
+    async def _play_loop() -> None:
+        # Real time scaled by playback_speed: frames are skipped when rendering
+        # can't keep up, so the simulated time stays on schedule.
+        position = float(state.frame)
+        shown = int(state.frame)
+        last = time.perf_counter()
+        while state.playing:
+            await asyncio.sleep(1.0 / PLAYBACK_FPS)
+            if not state.playing or playback["data"] is None:
+                break
+            if int(state.frame) != shown:  # the user moved the slider
+                position = float(state.frame)
+            now = time.perf_counter()
+            position += (
+                (now - last) * float(state.playback_speed) / state.frame_dt
+            )
+            last = now
+            shown = min(int(position), state.n_frames - 1)
+            with state:
+                state.frame = shown
+                if shown == state.n_frames - 1:
+                    state.playing = False
+
+    @ctrl.set("toggle_play")
+    def _toggle_play():
+        if state.n_frames == 0:
+            return
+        state.playing = not state.playing
+        if not state.playing:
+            return
+        if state.frame >= state.n_frames - 1:
+            state.frame = 0  # play again from the start
+        task = playback["task"]
+        if task is None or task.done():
+            playback["task"] = asyncio.create_task(_play_loop())
 
     @ctrl.set("reset_view")
     def _reset_view():
@@ -729,6 +896,54 @@ def build_app(obj_path: str | None):
                     "{{ z_min.toFixed(2) }} … {{ z_max.toFixed(2) }} m",
                     subtitle="Height range z",
                 )
+                with v3.Template(v_if="has_trajectory"):
+                    v3.VDivider(classes="my-2")
+                    v3.VListSubheader("Trajectory")
+                    with v3.VListItem():
+                        v3.VBtn(
+                            "{{ playing ? 'Pause' : 'Play' }}",
+                            click=ctrl.toggle_play,
+                            prepend_icon=(
+                                "playing ? 'mdi-pause' : 'mdi-play'",
+                            ),
+                            variant="tonal",
+                            disabled=("n_frames === 0",),
+                        )
+                    v3.VSlider(
+                        v_model=("frame",),
+                        min=0,
+                        max=("Math.max(n_frames - 1, 0)",),
+                        step=1,
+                        hide_details=True,
+                        classes="mx-4",
+                    )
+                    v3.VSelect(
+                        v_model=("playback_speed", 1.0),
+                        items=(
+                            "playback_speeds",
+                            [
+                                {"title": f"{s:g}×", "value": s}
+                                for s in PLAYBACK_SPEEDS
+                            ],
+                        ),
+                        label="Speed",
+                        density="compact",
+                        variant="outlined",
+                        hide_details=True,
+                        classes="mx-4 mt-2",
+                    )
+                    v3.VListItem(
+                        "{{ (frame * frame_dt).toFixed(2) }} s",
+                        subtitle="Time",
+                    )
+                    v3.VListItem(
+                        "{{ frame }} / {{ Math.max(n_frames - 1, 0) }}",
+                        subtitle="Frame",
+                    )
+                    v3.VListItem(
+                        "{{ frame_agents }}",
+                        subtitle="Agents (in height band)",
+                    )
                 v3.VDivider(classes="my-2")
                 # One block per mode; only the selected mode's drawer is
                 # rendered, always headed by that mode's name.
@@ -745,9 +960,9 @@ def build_app(obj_path: str | None):
                     # file dialog. (A JS handler touching `document` fails -- Vue evaluates
                     # event expressions in a sandbox without the global `document`.)
                     v3.VFileInput(
-                        v_model=("obj_file", None),
-                        accept=".obj",
-                        label="Load OBJ…",
+                        v_model=("input_file", None),
+                        accept=".obj," + ",".join(TRAJECTORY_SUFFIXES),
+                        label="Load OBJ / trajectory…",
                         prepend_icon="mdi-folder-open",
                         density="comfortable",
                         hide_details=True,
@@ -760,6 +975,7 @@ def build_app(obj_path: str | None):
                     [{"title": m.title, "value": m.key} for m in modes],
                 ),
                 label="Mode",
+                disabled=("!has_geometry",),
                 density="compact",
                 variant="outlined",
                 hide_details=True,
@@ -842,9 +1058,11 @@ def build_app(obj_path: str | None):
                 ctrl.view_update = view.update
 
     # No initial mesh: start with an empty scene and let the user pick one via the
-    # toolbar's "File -> Load OBJ…" dialog.
+    # toolbar's "File" dialog.
     if obj_path:
         load_mesh(obj_path, os.path.basename(obj_path))
+    if trajectory_path:
+        load_trajectory(trajectory_path, os.path.basename(trajectory_path))
     return server
 
 
@@ -861,7 +1079,9 @@ def _wait_until_serving(port: int, timeout: float = 20.0) -> bool:
     return False
 
 
-def run_native(obj_path: str | None, port: int) -> None:
+def run_native(
+    obj_path: str | None, trajectory_path: str | None, port: int
+) -> None:
     """Show the trame app in a native pywebview (WebKitGTK) window.
 
     The trame/aiohttp server installs SIGINT handlers that only work on the main thread, and
@@ -879,6 +1099,7 @@ def run_native(obj_path: str | None, port: int) -> None:
             "-m",
             "trame_viewer",
             *(["--obj", obj_path] if obj_path else []),
+            *(["--trajectory", trajectory_path] if trajectory_path else []),
             "--port",
             str(port),
             "--no-browser",
@@ -899,10 +1120,16 @@ def run_native(obj_path: str | None, port: int) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument(
+    inputs = parser.add_mutually_exclusive_group()
+    inputs.add_argument(
         "--obj",
         default=None,
         help="OBJ file to load on startup",
+    )
+    inputs.add_argument(
+        "--trajectory",
+        default=None,
+        help="HDF5 trajectory file (jps.Hdf5TrajectoryWriter) to load on startup",
     )
     parser.add_argument(
         "--native",
@@ -925,10 +1152,10 @@ def main() -> None:
     port = args.port or find_free_port()
 
     if args.native:
-        run_native(args.obj, port)
+        run_native(args.obj, args.trajectory, port)
         return
 
-    server = build_app(args.obj)
+    server = build_app(args.obj, args.trajectory)
     if not args.no_browser:
         print(f"Serving on http://localhost:{port}  (Ctrl-C to stop)")
     server.start(
