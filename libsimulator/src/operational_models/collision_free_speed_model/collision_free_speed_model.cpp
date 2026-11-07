@@ -20,6 +20,9 @@ namespace
 /// How far ahead to look for a wall. The repulsion decays with `range_geometry_repulsion` (0.02 m
 /// by default), so a wall this far off contributes "nothing".
 constexpr double wall_search_radius = 4.0;
+/// How far beyond the body the side lines run, in units of `range_geometry_repulsion`. A wall
+/// just outside them pushes with at most exp(-5) of the strength at contact.
+constexpr double wall_margin_in_ranges = 5.0;
 } // namespace
 
 CollisionFreeSpeedModel::CollisionFreeSpeedModel(
@@ -55,9 +58,10 @@ Point CollisionFreeSpeedModel::compute_next_state(
 
     const auto desired_direction = step.route_orientation();
     Point boundary_repulsion{};
-    if(const auto wall = step.wall_ahead(
-           (desired_direction + neighbor_repulsion).normalized() * wall_search_radius)) {
-        boundary_repulsion = this->boundary_repulsion(current_state, *wall);
+    for(const auto& wall : step.walls_ahead(
+            (desired_direction + neighbor_repulsion).normalized() * wall_search_radius,
+            current_state.radius + wall_margin_in_ranges * _range_geometry_repulsion)) {
+        boundary_repulsion += this->boundary_repulsion(current_state, wall);
     }
 
     auto direction = (desired_direction + neighbor_repulsion + boundary_repulsion).normalized();

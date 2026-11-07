@@ -76,9 +76,11 @@ Point GeneralizedCentrifugalForceModel::compute_next_state(
     Point repwall{};
     const Point velocity_without_walls = (current_state.orientation * current_state.speed) +
                                          (fd + f_rep) / current_state.mass * step.dt();
-    if(const auto wall =
-           step.wall_ahead(velocity_without_walls.normalized() * wall_search_radius)) {
-        repwall = force_rep_wall(current_state, *wall);
+    // The side lines run along the widest the ellipse gets, plus the interpolation margin.
+    for(const auto& wall : step.walls_ahead(
+            velocity_without_walls.normalized() * wall_search_radius,
+            current_state.b_max + _max_geometry_interpolation_distance)) {
+        repwall += force_rep_wall(current_state, wall);
     }
     const Point acc = (fd + f_rep + repwall) / current_state.mass;
 

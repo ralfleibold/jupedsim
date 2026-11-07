@@ -649,10 +649,11 @@ Point WarpDriverModel::compute_next_state(
 
     // Boundary avoidance: steer agents away from walls
     const double reach = agent_data.radius * 3.0;
-    if(const auto wall = step.wall_ahead(new_vel_world.normalized() * reach);
-       wall && wall->distance > 1e-6) {
-        const double steering = agent_data.v0 * (reach - wall->distance) / wall->distance;
-        new_vel_world = new_vel_world + wall->normal * steering;
+    for(const auto& wall : step.walls_ahead(new_vel_world.normalized() * reach, reach)) {
+        if(wall.distance > 1e-6 && wall.distance < reach) {
+            const double steering = agent_data.v0 * (reach - wall.distance) / wall.distance;
+            new_vel_world = new_vel_world + wall.normal * steering;
+        }
     }
 
     // Re-clamp speed to v0 after wall steering

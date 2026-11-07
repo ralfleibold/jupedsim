@@ -16,6 +16,9 @@ namespace
 /// How far ahead to look for a wall. The obstacle force decays with `force_distance` (0.08 m by
 /// default), so a wall this far off contributes "nothing".
 constexpr double wall_search_radius = 4.0;
+/// How far beyond the body the side lines run, in units of `force_distance`. A wall just outside
+/// them pushes with at most exp(-5) of the strength at contact.
+constexpr double wall_margin_in_ranges = 5.0;
 } // namespace
 
 SocialForceModel::SocialForceModel(double body_force, double friction)
@@ -44,9 +47,10 @@ Point SocialForceModel::compute_next_state(
     }
     forces += f_rep / current_state.mass;
     Point obstacle_f{};
-    if(const auto wall = step.wall_ahead(
-           (current_state.velocity + forces * step.dt()).normalized() * wall_search_radius)) {
-        obstacle_f = obstacle_force(current_state, *wall);
+    for(const auto& wall : step.walls_ahead(
+            (current_state.velocity + forces * step.dt()).normalized() * wall_search_radius,
+            current_state.radius + wall_margin_in_ranges * current_state.force_distance)) {
+        obstacle_f += obstacle_force(current_state, wall);
     }
     forces += obstacle_f / current_state.mass;
 

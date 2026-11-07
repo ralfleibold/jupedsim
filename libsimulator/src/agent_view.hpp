@@ -7,6 +7,7 @@
 #include "line_segment.hpp"
 #include "point.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <concepts>
 #include <optional>
@@ -162,6 +163,44 @@ public:
             return std::nullopt;
         }
         return seen_from(location().xy(), *wall);
+    }
+
+    /// The walls a body of 'half_width' meets moving along 'direction', relative to the
+    /// agent: the first wall crossed by the centre line and by the two lines offset sideways
+    /// by 'half_width', and a wall within 'half_width' to either side. Each wall appears once.
+    /// The length of 'direction' is how far ahead to look.
+    std::vector<WallView> walls_ahead(Point direction, double half_width) const
+    {
+        std::vector<LineSegment> walls{};
+        const auto add = [&walls](const LineSegment& wall) {
+            const LineSegment reversed{wall.p2, wall.p1};
+            if(std::ranges::find_if(walls, [&](const LineSegment& s) {
+                   return s == wall || s == reversed;
+               }) == walls.end()) {
+                walls.push_back(wall);
+            }
+        };
+        if(const auto wall = _world.wall_along(location(), direction)) {
+            add(*wall);
+        }
+        const Point side = direction.normalized().rotate90_deg() * half_width;
+        for(const Point offset : {side, -side}) {
+            const auto start = location().try_move_on_surface(offset);
+            if(!start) {
+                // A wall beside the agent; the offset line would start behind it.
+                add(*_world.wall_along(location(), offset));
+                continue;
+            }
+            if(const auto wall = _world.wall_along(*start, direction)) {
+                add(*wall);
+            }
+        }
+        std::vector<WallView> views{};
+        views.reserve(walls.size());
+        for(const auto& wall : walls) {
+            views.push_back(seen_from(location().xy(), wall));
+        }
+        return views;
     }
 
     /// The same view, but with neighbors seen through 'states'. 'states' has to outlive the

@@ -534,10 +534,6 @@ def _velocity_along_wall(friction, y):
     return sim.agent(agent_id).state.velocity[0]
 
 
-@pytest.mark.xfail(
-    reason="Models only see the wall ahead, not one beside the agent",
-    strict=True,
-)
 def test_social_force_model_wall_friction_slows_down_an_agent_sliding_along():
     """An agent overlapping a wall by 5 cm slides along it. Friction acts
     against the motion: it slows the agent down, but does not reverse it.
@@ -699,3 +695,40 @@ def test_set_model_parameters_collision_free_speed_model_v3(
 
     state.agent_buffer = 0.5
     assert state.agent_buffer == 0.5
+
+
+def test_collision_free_speed_model_v3_does_not_back_into_a_wall():
+    """An agent whose spacing to the neighbor ahead is below its
+    agent_buffer backs up, but stops at the wall behind it instead of
+    walking into it."""
+    surface = jps.WalkableSurface()
+    room = surface.add_region(
+        boundary=[(-0.5, -2), (20, -2), (20, 2), (-0.5, 2)]
+    )
+    sim = jps.Simulation(
+        model=jps.CollisionFreeSpeedModelV3(), geometry=surface
+    )
+    exit_id = sim.add_exit_stage(
+        [([(19, -1), (20, -1), (20, 1), (19, 1)], room)]
+    )
+    journey_id = sim.add_journey(jps.JourneyDescription([exit_id]))
+
+    def add(position, desired_speed, agent_buffer):
+        return sim.add_agent(
+            journey_id=journey_id,
+            stage_id=exit_id,
+            position=position,
+            state=jps.CollisionFreeSpeedModelV3State(
+                radius=0.15,
+                time_gap=1.0,
+                desired_speed=desired_speed,
+                agent_buffer=agent_buffer,
+            ),
+            region_id=room,
+        )
+
+    backing = add((-0.3, 0), desired_speed=0.5, agent_buffer=1.0)
+    add((0.1, 0), desired_speed=0.0, agent_buffer=0.0)
+    for _ in range(3000):
+        sim.iterate()
+    assert -0.5 + 0.15 <= sim.agent(backing).position[0] < -0.3

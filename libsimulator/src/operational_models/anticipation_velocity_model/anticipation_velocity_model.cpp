@@ -55,9 +55,21 @@ Point AnticipationVelocityModel::compute_next_state(
         spacing = std::min(spacing, get_spacing(current_state, neighbor, direction));
     }
 
-    const auto optimal_speed = this->optimal_speed(current_state, spacing, current_state.time_gap);
+    auto optimal_speed = this->optimal_speed(current_state, spacing, current_state.time_gap);
     // Wall sliding behavior
     direction = handle_wall_avoidance(direction, current_state, step, _pushout_strength);
+    if(optimal_speed < 0.0) {
+        // Backing up must not move the agent closer than its radius to a wall behind it.
+        const auto step_back = direction * (optimal_speed * step.dt());
+        const auto look_back = step_back.normalized() * (current_state.radius + step_back.norm());
+        for(const auto& wall : step.walls_ahead(look_back, current_state.radius)) {
+            const auto dist = wall.segment.dist_to(step_back);
+            if(dist <= current_state.radius && dist < wall.distance) {
+                optimal_speed = 0.0;
+                break;
+            }
+        }
+    }
 
     const auto velocity = direction * optimal_speed;
     auto& next_model = std::get<State>(next);
@@ -269,14 +281,18 @@ Point AnticipationVelocityModel::handle_wall_avoidance(
     const double critical_wall_distance = current_state.wall_buffer_distance + current_state.radius;
 
     Point modified_direction = direction;
-    if(const auto wall = step.wall_ahead(direction * critical_wall_distance)) {
-        const auto dot_product = modified_direction.scalar_product(wall->normal);
+    for(const auto& wall :
+        step.walls_ahead(direction * critical_wall_distance, critical_wall_distance)) {
+        if(wall.distance >= critical_wall_distance) {
+            continue;
+        }
+        const auto dot_product = modified_direction.scalar_product(wall.normal);
 
         if(dot_product < 0) {
             // Direction points into wall - need to project it out
             // Remove the component pointing into the wall
-            const auto projected_direction = modified_direction - wall->normal * dot_product;
-            modified_direction = projected_direction + wall->normal * pushout_strength;
+            const auto projected_direction = modified_direction - wall.normal * dot_product;
+            modified_direction = projected_direction + wall.normal * pushout_strength;
         }
     }
 

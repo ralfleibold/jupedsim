@@ -284,6 +284,39 @@ TEST(AgentView, WallAheadBeyondTheLookAheadIsNotSeen)
     EXPECT_FALSE(env.first_agent_view(q).wall_ahead(Point{1.5, 0}).has_value());
 }
 
+TEST(AgentView, WallsAheadSeeTheWallBesideTheAgent)
+{
+    // Walking along the wall block's near face (x = 0.9), 0.2 to the side of it.
+    Environment env{};
+    env.add_agent({0.7, 0.0});
+    const auto geo = walled_geometry();
+    const auto q = env.query(*geo);
+    const auto view = env.first_agent_view(q);
+
+    EXPECT_FALSE(view.wall_ahead(Point{0, 3}).has_value());
+    const auto walls = view.walls_ahead(Point{0, 3}, 0.3);
+    ASSERT_EQ(walls.size(), 1u);
+    EXPECT_DOUBLE_EQ(walls[0].distance, 0.2);
+    EXPECT_DOUBLE_EQ(walls[0].normal.x, -1.0);
+}
+
+TEST(AgentView, WallsAheadSeeACornerTheCentreLineMisses)
+{
+    // Walking down past the block's top corner (0.9, 50), 0.15 beside it: the centre line
+    // stays in the walkable area, the right-hand line crosses the block's top edge.
+    Environment env{};
+    env.add_agent({0.75, 50.6});
+    const auto geo = walled_geometry();
+    const auto q = env.query(*geo);
+    const auto view = env.first_agent_view(q);
+
+    EXPECT_FALSE(view.wall_ahead(Point{0, -3}).has_value());
+    const auto walls = view.walls_ahead(Point{0, -3}, 0.3);
+    ASSERT_EQ(walls.size(), 1u);
+    EXPECT_NEAR(walls[0].closest_point.x, 0.15, 1e-12);
+    EXPECT_NEAR(walls[0].closest_point.y, -0.6, 1e-12);
+}
+
 TEST(AgentView, AgentsOnAnotherStoreyAreNotNeighbours)
 {
     // Two floors sharing a footprint, one agent on each, standing at the same (x, y) three
