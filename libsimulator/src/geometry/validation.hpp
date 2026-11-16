@@ -100,7 +100,7 @@ auto find_clearance_violation(Range&& points, double dist) -> std::optional<
 {
     if(dist <= 0) {
         throw SimulationError(
-            "check_min_clearance precondition violation, called with dist <= 0 [dist = {}]", dist);
+            "Internal Error: find_clearance_violation needs dist > 0, got {}.", dist);
     }
     using Point = std::ranges::range_value_t<Range>;
     constexpr size_t dimension = Point::Ambient_dimension::value;
@@ -126,8 +126,8 @@ auto find_clearance_violation(Range&& points, double dist) -> std::optional<
             // Also rejects NaN and infinity.
             if(!(std::abs(coordinate) < max_cell)) {
                 throw SimulationError(
-                    "check_min_clearance: coordinate of {} is not finite or too large for dist "
-                    "{}",
+                    "Internal Error: find_clearance_violation got the coordinate {}, which is "
+                    "not finite or too large for dist {}.",
                     p,
                     dist);
             }

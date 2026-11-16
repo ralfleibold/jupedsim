@@ -82,8 +82,7 @@ private:
     /// Minimum distance in meters between the walls of a region or connector, and between any
     /// two vertices of the geometry in 3D.
     static constexpr double min_clearance{0.025};
-    /// Largest absolute coordinate or height in meters. Keeps squared distances far from
-    /// overflowing in CGAL's predicates.
+    /// Largest absolute coordinate or height in meters, to avoid a loss in precision.
     static constexpr double max_coordinate{1e5};
     /// Sine of the largest angle between the seams of a connector between two heights
     /// (about 0.01 degrees, i.e. 1.7 mm over 10 m).

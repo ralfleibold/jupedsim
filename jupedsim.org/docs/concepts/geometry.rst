@@ -149,7 +149,12 @@ Requirements for regions
 * a ring (the boundary or a hole) has fewer than three points or intersects itself,
 * a hole does not lie strictly inside the boundary, or two holes overlap or touch,
 * walls of the region come closer than 2.5 cm to each other, or
-* a coordinate or the height is not finite.
+* a coordinate or the height is not finite or larger than 100 km in magnitude.
+
+.. note::
+
+    Coordinates from external sources, e.g. georeferenced data, can be too large. Move such a
+    geometry close to the origin first, e.g. with ``shapely.affinity.translate``.
 
 Polygons from *Shapely* operations or from WKT files can have walls closer than 2.5 cm, e.g. the
 many vertices of a small circle made with ``buffer``. Use fewer segments, e.g.

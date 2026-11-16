@@ -149,7 +149,7 @@ size_t GeometryBuilder::add_region(Polygon polygon, double height)
 {
     if(!std::isfinite(height) || std::abs(height) > max_coordinate) {
         throw SimulationError(
-            "Region height must be finite and at most {} in magnitude", max_coordinate);
+            "Region height must be finite and at most {} m in magnitude", max_coordinate);
     }
     // Checked up front: CGAL's predicates are not guarded against non-finite or huge values, and
     // some of them crash instead of throwing.
@@ -162,7 +162,7 @@ size_t GeometryBuilder::add_region(Polygon polygon, double height)
     };
     if(!is_valid_ring(polygon.boundary) || !std::ranges::all_of(polygon.holes, is_valid_ring)) {
         throw SimulationError(
-            "Region coordinates must be finite and at most {} in magnitude", max_coordinate);
+            "Region coordinates must be finite and at most {} m in magnitude", max_coordinate);
     }
 
     epeck::PolyWithHoles exact_polygon;
