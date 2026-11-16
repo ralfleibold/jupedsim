@@ -51,6 +51,11 @@ void init_geometry_builder(py::module_& m)
                std::vector<Point> boundary,
                std::vector<std::vector<Point>> holes,
                double height) {
+                // Accept closed point lists
+                py::detail::drop_closing_vertex(boundary);
+                for(auto& hole : holes) {
+                    py::detail::drop_closing_vertex(hole);
+                }
                 return builder.add_region({std::move(boundary), std::move(holes)}, height);
             },
             py::kw_only(),
@@ -61,7 +66,8 @@ void init_geometry_builder(py::module_& m)
                 Add a flat region.
 
                 The region is given either as ``polygon`` or as ``boundary`` with optional
-                ``holes``.
+                ``holes``. Rings are closed automatically; repeating the first point at the end
+                is optional.
 
                 Args:
                     polygon: Walkable area of the region; its interiors become holes.

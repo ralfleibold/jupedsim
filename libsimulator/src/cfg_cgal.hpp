@@ -128,24 +128,6 @@ CGAL::Point_2<Kernel> onto_xy(const CGAL::Point_3<Kernel>& point)
     return {point.x(), point.y()};
 }
 
-/// Fixes expected winding for a polygon with holes.
-/// Expected winding is counter clockwise widing for the outer boundary and clockwise winding for
-/// holes. Does not change the input polygon if winding is correct already.
-/// @tparam Kernel the CGAL Kernel to use.
-/// @param[in,out] polygon with holes to fixup.
-template <typename Kernel>
-void fixup_winding(CGAL::Polygon_2<Kernel>& polygon);
-
-template <typename Kernel>
-void fixup_winding(CGAL::Polygon_with_holes_2<Kernel>& polygon)
-{
-    fixup_winding(polygon.outer_boundary());
-    for(auto& h : polygon.holes()) {
-        if(h.is_counterclockwise_oriented())
-            h.reverse_orientation();
-    }
-}
-
 /// Fixes the winding of a polygon to counter clockwise.
 /// Does not change the input polygon if winding is correct already.
 /// @tparam Kernel the CGAL Kernel to use.
@@ -155,6 +137,21 @@ void fixup_winding(CGAL::Polygon_2<Kernel>& polygon)
 {
     if(polygon.is_clockwise_oriented()) {
         polygon.reverse_orientation();
+    }
+}
+
+/// Fixes expected winding for a polygon with holes.
+/// Expected winding is counter clockwise winding for the outer boundary and clockwise winding for
+/// holes. Does not change the input polygon if winding is correct already.
+/// @tparam Kernel the CGAL Kernel to use.
+/// @param[in,out] polygon with holes to fixup.
+template <typename Kernel>
+void fixup_winding(CGAL::Polygon_with_holes_2<Kernel>& polygon)
+{
+    fixup_winding(polygon.outer_boundary());
+    for(auto& h : polygon.holes()) {
+        if(h.is_counterclockwise_oriented())
+            h.reverse_orientation();
     }
 }
 
@@ -190,33 +187,21 @@ std::size_t vertex_count(const CGAL::Polygon_with_holes_2<Kernel>& polygon)
 //=================================================================================================
 // Type Converters
 //=================================================================================================
-/// Converts an inexact CGAL point into a Point, exact.
-template <>
-struct Convert<epick::Point2D, Point> {
-    static Point from(const epick::Point2D& p) { return Point{p}; }
-};
-
-/// Converts a Point into an inexact CGAL point, exact.
-template <>
-struct Convert<Point, epick::Point2D> {
-    static epick::Point2D from(const Point& p) { return p.cgal(); }
-};
-
-/// Converts an exact CGAL point into a Point.
+/// Converts a CGAL point into a Point.
 /// Rounds each coordinate to a double; exact if the coordinates are representable as doubles,
 /// e.g. for points constructed from doubles.
-template <>
-struct Convert<epeck::Point2D, Point> {
-    static Point from(const epeck::Point2D& p)
+template <typename Kernel>
+struct Convert<CGAL::Point_2<Kernel>, Point> {
+    static Point from(const CGAL::Point_2<Kernel>& p)
     {
         return {CGAL::to_double(p.x()), CGAL::to_double(p.y())};
     }
 };
 
-/// Converts a Point into an exact CGAL point, exact.
-template <>
-struct Convert<Point, epeck::Point2D> {
-    static epeck::Point2D from(const Point& p) { return {p.x(), p.y()}; }
+/// Converts a Point into a CGAL point.
+template <typename Kernel>
+struct Convert<Point, CGAL::Point_2<Kernel>> {
+    static CGAL::Point_2<Kernel> from(const Point& p) { return {p.x(), p.y()}; }
 };
 
 /// Converts a CGAL point between kernels.
@@ -273,8 +258,8 @@ struct fmt::formatter<CGAL::Point_2<K>> {
 
     auto format(const CGAL::Point_2<K>& p, fmt::format_context& ctx) const
     {
-        const auto x = CGAL::to_double(p.x());
-        const auto y = CGAL::to_double(p.y());
+        const double x = CGAL::to_double(p.x());
+        const double y = CGAL::to_double(p.y());
         return fmt::format_to(ctx.out(), "({}, {})", x, y);
     }
 };
@@ -285,9 +270,9 @@ struct fmt::formatter<CGAL::Point_3<K>> {
 
     auto format(const CGAL::Point_3<K>& p, fmt::format_context& ctx) const
     {
-        const auto x = CGAL::to_double(p.x());
-        const auto y = CGAL::to_double(p.y());
-        const auto z = CGAL::to_double(p.z());
+        const double x = CGAL::to_double(p.x());
+        const double y = CGAL::to_double(p.y());
+        const double z = CGAL::to_double(p.z());
         return fmt::format_to(ctx.out(), "({}, {}, {})", x, y, z);
     }
 };

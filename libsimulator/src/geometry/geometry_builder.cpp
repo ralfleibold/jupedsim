@@ -165,10 +165,6 @@ size_t GeometryBuilder::add_region(Polygon polygon, double height)
             "Region coordinates must be finite and at most {} in magnitude", max_coordinate);
     }
 
-    bool rings_are_simple = false;
-    bool holes_are_valid = false;
-    std::optional<epeck::Point2D> shared_vertex{};
-    std::optional<std::pair<epeck::Point2D, epeck::Point2D>> too_close{};
     epeck::PolyWithHoles exact_polygon;
     // The coordinates are checked above; this only turns any remaining CGAL error into a
     // SimulationError.
@@ -178,49 +174,49 @@ size_t GeometryBuilder::add_region(Polygon polygon, double height)
         const auto is_simple_ring = [](const epeck::Poly& ring) {
             return ring.size() >= 3 && ring.is_simple();
         };
-        rings_are_simple = is_simple_ring(exact_polygon.outer_boundary()) &&
-                           std::ranges::all_of(exact_polygon.holes(), is_simple_ring);
-        if(rings_are_simple) {
-            fixup_winding(exact_polygon);
-            // With simple rings, only the holes' placement can make the polygon invalid.
-            epeck::Traits traits;
-            holes_are_valid = CGAL::is_valid_polygon_with_holes(exact_polygon, traits);
-            // CGAL accepts rings touching at a shared vertex. Within a simple ring vertices are
-            // unique, so a repeated vertex means two rings touch.
-            std::vector<epeck::Point2D> corners{};
-            corners.reserve(vertex_count(exact_polygon));
-            std::ranges::copy(vertices(exact_polygon), std::back_inserter(corners));
-            std::ranges::sort(corners, [](const auto& p, const auto& q) {
-                return CGAL::compare_xy(p, q) == CGAL::SMALLER;
-            });
-            if(const auto repeated = std::ranges::adjacent_find(corners);
-               repeated != std::ranges::end(corners)) {
-                shared_vertex = *repeated;
-            }
-            too_close = find_clearance_violation(vertices(exact_polygon), min_clearance);
+        if(!is_simple_ring(exact_polygon.outer_boundary()) ||
+           !std::ranges::all_of(exact_polygon.holes(), is_simple_ring)) {
+            throw SimulationError(
+                "Invalid polygon provided to add_region: every ring needs at least 3 vertices and "
+                "must not intersect itself.");
         }
+        fixup_winding(exact_polygon);
+        // With simple rings, only the holes' placement can make the polygon invalid.
+        epeck::Traits traits;
+        const bool holes_are_valid = CGAL::is_valid_polygon_with_holes(exact_polygon, traits);
+        // CGAL accepts rings touching at a shared vertex. Within a simple ring vertices are
+        // unique, so a repeated vertex means two rings touch.
+        std::vector<epeck::Point2D> corners{};
+        corners.reserve(vertex_count(exact_polygon));
+        std::ranges::copy(vertices(exact_polygon), std::back_inserter(corners));
+        std::ranges::sort(corners, [](const auto& p, const auto& q) {
+            return CGAL::compare_xy(p, q) == CGAL::SMALLER;
+        });
+        std::optional<epeck::Point2D> shared_vertex{};
+        if(const auto repeated = std::ranges::adjacent_find(corners);
+           repeated != std::ranges::end(corners)) {
+            shared_vertex = *repeated;
+        }
+        if(!holes_are_valid || shared_vertex) {
+            throw SimulationError(
+                "Holes must lie strictly inside the boundary and must neither overlap nor touch "
+                "each other{}.",
+                shared_vertex ? fmt::format(" (two rings touch at {})", *shared_vertex) : "");
+        }
+        if(const auto too_close =
+               find_clearance_violation(vertices(exact_polygon), min_clearance)) {
+            throw SimulationError(
+                "Vertices {} and {} are closer than {} m: all vertices of a region need a "
+                "clearance of {} m.",
+                too_close->first,
+                too_close->second,
+                min_clearance,
+                min_clearance);
+        }
+    } catch(const SimulationError&) {
+        throw;
     } catch(const std::runtime_error& e) {
         throw SimulationError("{}", e.what());
-    }
-    if(!rings_are_simple) {
-        throw SimulationError(
-            "Invalid polygon provided to add_region: every ring needs at least 3 vertices and "
-            "must not intersect itself.");
-    }
-    if(!holes_are_valid || shared_vertex) {
-        throw SimulationError(
-            "Holes must lie strictly inside the boundary and must neither overlap nor touch each "
-            "other{}.",
-            shared_vertex ? fmt::format(" (two rings touch at {})", *shared_vertex) : "");
-    }
-    if(too_close) {
-        throw SimulationError(
-            "Vertices {} and {} are closer than {} m: all vertices of a region need a clearance "
-            "of {} m.",
-            too_close->first,
-            too_close->second,
-            min_clearance,
-            min_clearance);
     }
 
     std::vector<std::vector<size_t>> indices{};

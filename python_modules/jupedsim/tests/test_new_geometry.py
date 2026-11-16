@@ -480,3 +480,17 @@ def test_build_leaves_the_builder_reusable():
     )
     assert builder.build().region_count() == 3
     assert first.region_count() == 1
+
+
+def test_add_region_accepts_closed_point_lists():
+    builder = jps.GeometryBuilder()
+    room = shapely.Polygon(
+        [(0, 0), (10, 0), (10, 10), (0, 10)],
+        holes=[[(2, 2), (2, 4), (4, 4), (4, 2)]],
+    )
+    builder.add_region(
+        boundary=list(room.exterior.coords),
+        holes=[list(hole.coords) for hole in room.interiors],
+        height=0.0,
+    )
+    builder.build()
