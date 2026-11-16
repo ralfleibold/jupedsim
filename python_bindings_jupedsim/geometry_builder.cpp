@@ -81,9 +81,10 @@ void init_geometry_builder(py::module_& m)
                 Raises:
                     SimulationError: If the boundary or a hole is not simple or has fewer than
                         three distinct points, a hole does not lie strictly inside the boundary
-                        or overlaps or touches another hole, two vertices are closer than
-                        2.5 cm, or a coordinate or the height is not finite. Overlapping or
-                        touching regions at the same height are reported by :meth:`build`.
+                        or overlaps or touches another hole, walls of the region come closer
+                        than 2.5 cm to each other, or a coordinate or the height is not finite.
+                        Overlapping or touching regions at the same height are reported by
+                        :meth:`build`.
             )")
                 .c_str())
         .def(
@@ -121,7 +122,8 @@ void init_geometry_builder(py::module_& m)
                         are the same, an edge is not an edge of its region or already carries
                         a connector, or the connector is not simple in the (x, y) plane, does
                         not lie outside of both regions, is not planar (the edges of regions
-                        at different heights must be parallel) or is too steep to walk.
+                        at different heights must be parallel), is too steep to walk, or its
+                        walls come closer than 2.5 cm to each other.
             )")
                 .c_str())
         .def(

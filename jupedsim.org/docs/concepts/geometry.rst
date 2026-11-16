@@ -148,10 +148,10 @@ Requirements for regions
 
 * a ring (the boundary or a hole) has fewer than three points or intersects itself,
 * a hole does not lie strictly inside the boundary, or two holes overlap or touch,
-* two vertices of the region are closer than 2.5 cm to each other, or
+* walls of the region come closer than 2.5 cm to each other, or
 * a coordinate or the height is not finite.
 
-Polygons from *Shapely* operations or from WKT files can have vertices closer than 2.5 cm, e.g. the
+Polygons from *Shapely* operations or from WKT files can have walls closer than 2.5 cm, e.g. the
 many vertices of a small circle made with ``buffer``. Use fewer segments, e.g.
 ``point.buffer(0.2, quad_segs=4)``, or remove such vertices, e.g. with
 ``shapely.simplify(walkable_area, 0.025)``, and check the result.

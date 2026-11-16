@@ -45,6 +45,19 @@ void expect_seam(
     EXPECT_TRUE(source == a && target == b);
     EXPECT_EQ(CGAL::orientation(source, target, inside), CGAL::LEFT_TURN);
 }
+
+/// Expects add_region to reject @p polygon with an error containing @p message.
+void expect_rejected(const GeometryBuilder::Polygon& polygon, std::string_view message)
+{
+    GeometryBuilder builder{};
+    try {
+        builder.add_region(polygon, 0.0);
+        FAIL() << "add_region accepted the polygon";
+    } catch(const SimulationError& error) {
+        EXPECT_NE(std::string_view(error.what()).find(message), std::string_view::npos)
+            << error.what();
+    }
+}
 } // namespace
 
 TEST(GeometryBuilder, UnconnectedFloors)
@@ -249,6 +262,20 @@ TEST(GeometryBuilder, NonParallelSeamsAreRejected)
         SimulationError);
 }
 
+TEST(GeometryBuilder, NarrowConnectorIsRejected)
+{
+    GeometryBuilder builder{};
+    const auto first = builder.add_region({{{0, 0}, {10, 0}, {10, 10}, {0, 10}}, {}}, 0.0);
+    const auto second = builder.add_region({{{10.01, 0}, {20, 0}, {20, 10}, {10.01, 10}}, {}}, 0.0);
+    try {
+        builder.connect_regions(first, {{10, 0}, {10, 10}}, second, {{10.01, 0}, {10.01, 10}});
+        FAIL() << "connect_regions accepted a connector 1 cm wide";
+    } catch(const SimulationError& error) {
+        EXPECT_NE(std::string_view(error.what()).find("closer than"), std::string_view::npos)
+            << error.what();
+    }
+}
+
 TEST(GeometryBuilder, FlatConnectorMayHaveThreeCollinearCorners)
 {
     // The connector (0, 0), (1, 0), (2, 0), (0, 1) is a triangle with a corner on one side.
@@ -341,8 +368,7 @@ TEST(GeometryBuilder, ConnectorBetweenHeightsDifferingByFloatNoiseIsFlat)
 TEST(GeometryBuilder, VertexWithinRoundingOfAnEdgeIsReported)
 {
     // The hole's first vertex lies 8.6e-16 m inside the slanted boundary edge.
-    GeometryBuilder builder{};
-    builder.add_region(
+    expect_rejected(
         {{{-1.7621260100290268, 6.333376538516342},
           {2.40986716807019, 3.577569411394854},
           {20.202159898075355, 30.513171385057028},
@@ -350,13 +376,42 @@ TEST(GeometryBuilder, VertexWithinRoundingOfAnEdgeIsReported)
          {{{8.882473605724929, 13.37639373282793},
            {7.772494257392937, 13.510355840442305},
            {8.323655682817234, 14.34475447606215}}}},
-        0.0);
-    try {
-        builder.build();
-        FAIL() << "build() accepted a degenerate region";
-    } catch(const SimulationError& error) {
-        EXPECT_NE(
-            std::string_view(error.what()).find("on one of its edges"), std::string_view::npos)
-            << error.what();
-    }
+        "closer than");
+}
+
+TEST(GeometryBuilder, HoleNearlyTouchingTheBoundaryIsRejected)
+{
+    expect_rejected(
+        {{{0, 0}, {10, 0}, {10, 10}, {0, 10}}, {{{1e-9, 5}, {2, 4}, {2, 6}}}}, "closer than");
+}
+
+TEST(GeometryBuilder, VertexNearAnEdgeIsRejected)
+{
+    // A narrow slit from the top whose tip ends 1 mm above the bottom edge.
+    expect_rejected(
+        {{{0, 0}, {10, 0}, {10, 10}, {5, 10}, {5, 0.001}, {4.9, 10}, {0, 10}}, {}}, "closer than");
+}
+
+TEST(GeometryBuilder, ParallelWallsNearEachOtherAreRejected)
+{
+    // The holes' facing edges are 1 mm apart, their vertices are not close to each other.
+    expect_rejected(
+        {{{0, 0}, {10, 0}, {10, 10}, {0, 10}},
+         {{{2, 2}, {8, 2}, {8, 4}, {2, 4}}, {{3, 4.001}, {7, 4.001}, {7, 6}, {3, 6}}}},
+        "closer than");
+}
+
+TEST(GeometryBuilder, HolesSharingAVertexAreRejected)
+{
+    expect_rejected(
+        {{{0, 0}, {10, 0}, {10, 10}, {0, 10}},
+         {{{2, 2}, {4, 2}, {4, 4}, {2, 4}}, {{4, 4}, {6, 4}, {6, 6}}}},
+        "closer than 0.025 m to each other at (4, 4)");
+}
+
+TEST(GeometryBuilder, HoleAtTheClearanceFromTheBoundaryIsAccepted)
+{
+    GeometryBuilder builder{};
+    EXPECT_NO_THROW(builder.add_region(
+        {{{0, 0}, {10, 0}, {10, 10}, {0, 10}}, {{{0.03, 5}, {2, 4}, {2, 6}}}}, 0.0));
 }

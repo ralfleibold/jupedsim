@@ -170,20 +170,6 @@ auto vertices(const CGAL::Polygon_with_holes_2<Kernel>& polygon)
            std::views::transform(ring) | std::views::join;
 }
 
-/// Count all vertices in a polygon with holes.
-/// @tparam Kernel the CGAL Kernel to use.
-/// @param polygon with holes to count vertices of
-/// @return number of vertices in the outer boundary and all holes
-template <typename Kernel>
-std::size_t vertex_count(const CGAL::Polygon_with_holes_2<Kernel>& polygon)
-{
-    std::size_t count = polygon.outer_boundary().size();
-    for(const auto& hole : polygon.holes()) {
-        count += hole.size();
-    }
-    return count;
-}
-
 //=================================================================================================
 // Type Converters
 //=================================================================================================

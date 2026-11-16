@@ -113,11 +113,6 @@ def test_touching_polygons():
     [
         pytest.param(
             rectangle((0, 0), (3, 3)),
-            [[(0, 0), (1, 1), (2, 1)]],
-            id="hole-at-boundary-corner",
-        ),
-        pytest.param(
-            rectangle((0, 0), (3, 3)),
             [[(1, 0), (1, 1), (2, 1)]],
             id="hole-on-boundary-edge",
         ),
@@ -151,11 +146,6 @@ def test_touching_polygons():
             [rectangle((1, 1), (3, 3)), rectangle((2, 2), (4, 4))],
             id="holes-cross-each-other",
         ),
-        pytest.param(
-            rectangle((0, 0), (10, 10)),
-            [rectangle((1, 1), (3, 3)), rectangle((3, 3), (4, 4))],
-            id="holes-touch-at-corner",
-        ),
     ],
 )
 def test_add_region_invalid_holes(boundary, holes):
@@ -163,6 +153,27 @@ def test_add_region_invalid_holes(boundary, holes):
     with pytest.raises(
         jps.SimulationError, match="Holes must lie strictly inside the boundary"
     ):
+        builder.add_region(boundary=boundary, holes=holes, height=0.0)
+
+
+@pytest.mark.parametrize(
+    "boundary, holes",
+    [
+        pytest.param(
+            rectangle((0, 0), (3, 3)),
+            [[(0, 0), (1, 1), (2, 1)]],
+            id="hole-at-boundary-corner",
+        ),
+        pytest.param(
+            rectangle((0, 0), (10, 10)),
+            [rectangle((1, 1), (3, 3)), rectangle((3, 3), (4, 4))],
+            id="holes-touch-at-corner",
+        ),
+    ],
+)
+def test_add_region_holes_touching_at_a_vertex(boundary, holes):
+    builder = jps.GeometryBuilder()
+    with pytest.raises(jps.SimulationError, match="come closer than"):
         builder.add_region(boundary=boundary, holes=holes, height=0.0)
 
 

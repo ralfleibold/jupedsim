@@ -166,6 +166,7 @@ size_t GeometryBuilder::add_region(Polygon polygon, double height)
     }
 
     epeck::PolyWithHoles exact_polygon;
+    epick::PolyWithHoles poly_with_holes;
     // The coordinates are checked above; this only turns any remaining CGAL error into a
     // SimulationError.
     try {
@@ -183,35 +184,17 @@ size_t GeometryBuilder::add_region(Polygon polygon, double height)
         fixup_winding(exact_polygon);
         // With simple rings, only the holes' placement can make the polygon invalid.
         epeck::Traits traits;
-        const bool holes_are_valid = CGAL::is_valid_polygon_with_holes(exact_polygon, traits);
-        // CGAL accepts rings touching at a shared vertex. Within a simple ring vertices are
-        // unique, so a repeated vertex means two rings touch.
-        std::vector<epeck::Point2D> corners{};
-        corners.reserve(vertex_count(exact_polygon));
-        std::ranges::copy(vertices(exact_polygon), std::back_inserter(corners));
-        std::ranges::sort(corners, [](const auto& p, const auto& q) {
-            return CGAL::compare_xy(p, q) == CGAL::SMALLER;
-        });
-        std::optional<epeck::Point2D> shared_vertex{};
-        if(const auto repeated = std::ranges::adjacent_find(corners);
-           repeated != std::ranges::end(corners)) {
-            shared_vertex = *repeated;
-        }
-        if(!holes_are_valid || shared_vertex) {
+        if(!CGAL::is_valid_polygon_with_holes(exact_polygon, traits)) {
             throw SimulationError(
                 "Holes must lie strictly inside the boundary and must neither overlap nor touch "
-                "each other{}.",
-                shared_vertex ? fmt::format(" (two rings touch at {})", *shared_vertex) : "");
+                "each other.");
         }
-        if(const auto too_close =
-               find_clearance_violation(vertices(exact_polygon), min_clearance)) {
+        poly_with_holes = into<epick::PolyWithHoles>(exact_polygon);
+        if(const auto too_close = find_edge_clearance_violation(poly_with_holes, min_clearance)) {
             throw SimulationError(
-                "Vertices {} and {} are closer than {} m: all vertices of a region need a "
-                "clearance of {} m.",
-                too_close->first,
-                too_close->second,
+                "Walls of the region come closer than {} m to each other at {}.",
                 min_clearance,
-                min_clearance);
+                *too_close);
         }
     } catch(const SimulationError&) {
         throw;
@@ -242,7 +225,7 @@ size_t GeometryBuilder::add_region(Polygon polygon, double height)
     Region region{
         .polygons = std::move(indices),
         .height = height,
-        .poly_with_holes = into<epick::PolyWithHoles>(exact_polygon)};
+        .poly_with_holes = std::move(poly_with_holes)};
     // Boost has no add_vertex overload taking an rvalue property, so move it in afterwards.
     const auto id = boost::add_vertex(_region_graph);
     _region_graph[id] = std::move(region);
@@ -321,6 +304,14 @@ size_t GeometryBuilder::connect_regions(
     if(!epick::Poly(std::begin(corners_2d), std::end(corners_2d)).is_simple()) {
         throw SimulationError("Connector is no simple polygon in 2D.");
     }
+    epick::PolyWithHoles poly_with_holes =
+        as_2d_poly_with_holes({connector_polygon}, _global_vertices);
+    if(const auto too_close = find_edge_clearance_violation(poly_with_holes, min_clearance)) {
+        throw SimulationError(
+            "Walls of the connector come closer than {} m to each other at {}.",
+            min_clearance,
+            *too_close);
+    }
 
     // Both seams are horizontal. On one height (up to height_tolerance) the connector is flat;
     // between two heights it is planar only if the seams are parallel, which is checked up to a
@@ -359,7 +350,7 @@ size_t GeometryBuilder::connect_regions(
     Region connector{
         .polygons = {connector_polygon},
         .height = std::nullopt,
-        .poly_with_holes = as_2d_poly_with_holes({connector_polygon}, _global_vertices)};
+        .poly_with_holes = std::move(poly_with_holes)};
     const auto connector_region = boost::add_vertex(connector, _region_graph);
     boost::add_edge(from_region, connector_region, Seam{a, b}, _region_graph);
     boost::add_edge(connector_region, to_region, Seam{c, d}, _region_graph);
@@ -481,9 +472,9 @@ std::unique_ptr<Geometry> GeometryBuilder::build() const
     }
 
     // Regions and connectors are counterclockwise, so every face points upwards in exact
-    // arithmetic. A face whose double normal does not is degenerate: one of its corners lies
-    // within rounding distance of the opposite edge, which the vertex clearance does not catch.
-    // Reported here, as validate_mesh would only call it too steep.
+    // arithmetic. A face whose double normal does not is degenerate, e.g. a corner within
+    // rounding distance of the opposite edge. The clearance checks rule this out for the input;
+    // this checks what the triangulation made of it.
     for(const auto face : mesh.faces()) {
         if(CGAL::Polygon_mesh_processing::compute_face_normal(face, mesh).z() <= 0) {
             throw SimulationError(

@@ -165,3 +165,13 @@ bool check_min_clearance(Range&& points, double dist)
 {
     return !find_clearance_violation(std::forward<Range>(points), dist).has_value();
 }
+
+/// Find a vertex of @p polygon closer than @p dist to an edge it is not an end point of.
+/// As the rings of a valid polygon do not cross, this also finds edges closer than @p dist to
+/// each other: the distance of two disjoint segments is taken at an end point of one of them.
+/// Runs in O(n log^2 n) for n vertices, plus the pairs whose bounding boxes overlap.
+/// @param polygon to check, its rings simple and not crossing each other.
+/// @param dist minimum distance between a vertex and the edges it does not end.
+/// @return the first vertex found closer than @p dist to such an edge, or nothing.
+std::optional<epick::Point2D>
+find_edge_clearance_violation(const epick::PolyWithHoles& polygon, double dist);

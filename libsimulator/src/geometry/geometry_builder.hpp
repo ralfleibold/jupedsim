@@ -79,7 +79,8 @@ private:
     using RegionGraph =
         boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS, Region, Seam>;
 
-    /// Minimum clearance around each vertex in meters.
+    /// Minimum distance in meters between the walls of a region or connector, and between any
+    /// two vertices of the geometry in 3D.
     static constexpr double min_clearance{0.025};
     /// Largest absolute coordinate or height in meters. Keeps squared distances far from
     /// overflowing in CGAL's predicates.
