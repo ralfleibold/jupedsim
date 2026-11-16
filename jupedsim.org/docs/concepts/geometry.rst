@@ -18,6 +18,7 @@ Walkable area
 
 The walkable area is built with a :class:`~jupedsim.GeometryBuilder` out of regions.
 Its :meth:`~jupedsim.GeometryBuilder.build` creates the :class:`~jupedsim.Geometry` that is passed to :class:`~jupedsim.Simulation`.
+After that, the builder cannot be used any more; another geometry needs a new :class:`~jupedsim.GeometryBuilder`.
 Each region is one simple, i.e., non self intersecting polygon covering a non-zero area.
 It is added either as a *Shapely* :class:`~shapely.Polygon` or as a list of points describing its boundary.
 

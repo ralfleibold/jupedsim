@@ -46,17 +46,24 @@ void expect_seam(
     EXPECT_EQ(CGAL::orientation(source, target, inside), CGAL::LEFT_TURN);
 }
 
-/// Expects add_region to reject @p polygon with an error containing @p message.
-void expect_rejected(const GeometryBuilder::Polygon& polygon, std::string_view message)
+/// Expects @p call to throw a SimulationError containing @p message.
+template <typename Call>
+void expect_error(Call&& call, std::string_view message)
 {
-    GeometryBuilder builder{};
     try {
-        builder.add_region(polygon, 0.0);
-        FAIL() << "add_region accepted the polygon";
+        call();
+        FAIL() << "no error thrown, expected one containing \"" << message << "\"";
     } catch(const SimulationError& error) {
         EXPECT_NE(std::string_view(error.what()).find(message), std::string_view::npos)
             << error.what();
     }
+}
+
+/// Expects add_region to reject @p polygon with an error containing @p message.
+void expect_rejected(const GeometryBuilder::Polygon& polygon, std::string_view message)
+{
+    GeometryBuilder builder{};
+    expect_error([&] { builder.add_region(polygon, 0.0); }, message);
 }
 } // namespace
 
@@ -198,20 +205,32 @@ TEST(GeometryBuilder, SeamOnHoleEdge)
     expect_seam(*graph, stairs, ground, {2, 7}, {2, 3}, {7, 5});
 }
 
-TEST(GeometryBuilder, BuildLeavesTheBuilderReusable)
+TEST(GeometryBuilder, BuilderCannotBeUsedAfterBuild)
 {
     GeometryBuilder builder{};
     const auto ground = builder.add_region({{{0, 0}, {10, 0}, {10, 10}, {0, 10}}, {}}, 0.0);
-    const GeometryBuilder& as_const = builder;
-    const auto first = as_const.build();
-    const auto again = as_const.build();
-    EXPECT_EQ(first->region_count(), 1u);
-    EXPECT_EQ(again->region_count(), 1u);
-
     const auto upper = builder.add_region({{{14, 0}, {20, 0}, {20, 10}, {14, 10}}, {}}, 1.0);
     builder.connect_regions(ground, {{10, 0}, {10, 10}}, upper, {{14, 0}, {14, 10}});
+    builder.build();
+
+    expect_error([&] { builder.build(); }, "already built");
+    expect_error(
+        [&] { builder.add_region({{{0, 20}, {10, 20}, {10, 30}, {0, 30}}, {}}, 0.0); },
+        "already built");
+    expect_error(
+        [&] { builder.connect_regions(ground, {{0, 10}, {0, 0}}, upper, {{20, 0}, {20, 10}}); },
+        "already built");
+}
+
+TEST(GeometryBuilder, FailedBuildLeavesTheBuilderUsable)
+{
+    GeometryBuilder builder{};
+    const auto ground = builder.add_region({{{0, 0}, {10, 0}, {10, 10}, {0, 10}}, {}}, 0.0);
+    const auto upper = builder.add_region({{{14, 0}, {20, 0}, {20, 10}, {14, 10}}, {}}, 1.0);
+    expect_error([&] { builder.build(); }, "not connected");
+
+    builder.connect_regions(ground, {{10, 0}, {10, 10}}, upper, {{14, 0}, {14, 10}});
     EXPECT_EQ(builder.build()->region_count(), 3u);
-    EXPECT_EQ(first->region_count(), 1u);
 }
 
 TEST(GeometryBuilder, ConnectorIgnoresSeamDirection)
@@ -319,7 +338,7 @@ TEST(GeometryBuilder, BuildRejectsFloorsTouchingAlongAnEdge)
 
 TEST(GeometryBuilder, EmptyBuilderIsRejected)
 {
-    const GeometryBuilder builder{};
+    GeometryBuilder builder{};
     EXPECT_THROW(builder.build(), SimulationError);
 }
 

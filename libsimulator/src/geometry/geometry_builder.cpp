@@ -147,6 +147,7 @@ GeometryBuilder::GeometryBuilder()
 
 size_t GeometryBuilder::add_region(Polygon polygon, double height)
 {
+    throw_if_built();
     if(!std::isfinite(height) || std::abs(height) > max_coordinate) {
         throw SimulationError(
             "Region height must be finite and at most {} m in magnitude", max_coordinate);
@@ -232,6 +233,13 @@ size_t GeometryBuilder::add_region(Polygon polygon, double height)
     return id;
 }
 
+void GeometryBuilder::throw_if_built() const
+{
+    if(_built) {
+        throw SimulationError("Geometry was already built; create a new GeometryBuilder.");
+    }
+}
+
 std::array<size_t, 2> GeometryBuilder::find_edge(size_t region_id, const LineSegment& edge) const
 {
     // no need to compare z as regions by design cannot overlap in xy within a single region
@@ -261,6 +269,7 @@ size_t GeometryBuilder::connect_regions(
     size_t to_region,
     LineSegment to)
 {
+    throw_if_built();
     auto check_region = [this](size_t region_id, std::string_view name) {
         if(region_id >= boost::num_vertices(_region_graph)) {
             throw SimulationError("Unknown region id used for {}: {}", name, region_id);
@@ -384,8 +393,9 @@ std::unique_ptr<GeometryBuilder::RegionGraph2D> GeometryBuilder::create_region_g
     return graph;
 }
 
-std::unique_ptr<Geometry> GeometryBuilder::build() const
+std::unique_ptr<Geometry> GeometryBuilder::build()
 {
+    throw_if_built();
     if(boost::num_vertices(_region_graph) == 0) {
         throw SimulationError("No Geometry defined.");
     }
@@ -497,6 +507,8 @@ std::unique_ptr<Geometry> GeometryBuilder::build() const
     }
     validate_mesh(mesh, &region_split.region);
 
-    return std::make_unique<Geometry>(
+    auto geometry = std::make_unique<Geometry>(
         std::move(mesh), std::move(region_split), create_region_graph_2d());
+    _built = true;
+    return geometry;
 }

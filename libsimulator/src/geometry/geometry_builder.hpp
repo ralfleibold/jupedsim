@@ -22,8 +22,8 @@ class Geometry;
 ///
 /// Flat regions (floors) are added with add_region() and joined by inclined connectors (stairs,
 /// ramps) with connect_regions(). Each call validates its own input right away; build()
-/// validates what needs all regions at once and creates the Geometry. The builder stays
-/// unchanged by build(), so it can be extended and built again. Regions cannot be removed.
+/// validates what needs all regions at once and creates the Geometry. After a successful
+/// build(), the builder cannot be used any more. Regions cannot be removed.
 ///
 /// Kernels: every stored vertex is an input double; the builder never constructs a point, and
 /// connectors reuse the vertices of the regions they join. Vertices are therefore stored as
@@ -52,14 +52,14 @@ public:
 
     std::unique_ptr<RegionGraph2D> create_region_graph_2d() const;
 
-    /// Creates the geometry from the regions and connections added so far. The builder is
-    /// left unchanged, so it can be extended and built again.
+    /// Creates the geometry from the regions and connections added so far. After success, the
+    /// builder cannot be used any more; after an error, it is left unchanged.
     /// Validates what needs the whole input: regions on one height must neither overlap nor
     /// touch, regions less than min_headroom above each other must not overlap, all vertices
     /// need a clearance of min_clearance, and the resulting surface must be walkable, free of
     /// faces passing through each other and connected.
     /// @throws SimulationError if the input does not form a valid geometry.
-    std::unique_ptr<Geometry> build() const;
+    std::unique_ptr<Geometry> build();
 
 private:
     struct Region {
@@ -95,9 +95,11 @@ private:
     static constexpr double min_headroom{1.5};
 
     std::array<size_t, 2> find_edge(size_t region_id, const LineSegment& edge) const;
+    void throw_if_built() const;
 
     std::vector<epick::Point3D> _global_vertices;
     RegionGraph _region_graph{};
+    bool _built{false};
 };
 
 /// Converts a Polygon into a CGAL polygon with holes.

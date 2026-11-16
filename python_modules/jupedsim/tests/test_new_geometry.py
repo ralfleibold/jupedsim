@@ -472,25 +472,16 @@ def test_striped_floor():
     assert geo.region_count() == 2 * num - 1
 
 
-def test_build_leaves_the_builder_reusable():
+def test_builder_cannot_be_used_after_build():
     builder = jps.GeometryBuilder()
-    ground = builder.add_region(
+    builder.add_region(
         boundary=[(0, 0), (10, 0), (10, 10), (0, 10)], height=0.0
     )
-    first = builder.build()
-    assert builder.build().region_count() == 1
-
-    upper = builder.add_region(
-        boundary=[(14, 0), (20, 0), (20, 10), (14, 10)], height=1.0
-    )
-    builder.connect_regions(
-        from_region=ground,
-        from_edge=((10, 0), (10, 10)),
-        to_region=upper,
-        to_edge=((14, 0), (14, 10)),
-    )
-    assert builder.build().region_count() == 3
-    assert first.region_count() == 1
+    builder.build()
+    with pytest.raises(jps.SimulationError, match="already built"):
+        builder.add_region(
+            boundary=[(0, 20), (10, 20), (10, 30), (0, 30)], height=0.0
+        )
 
 
 def test_add_region_accepts_closed_point_lists():

@@ -133,7 +133,8 @@ void init_geometry_builder(py::module_& m)
             clean_doc(R"(
                 Create the geometry from the regions and connectors added so far.
 
-                The builder is left unchanged and can be extended and built again.
+                After success, the builder cannot be used any more; after an error, it is left
+                unchanged.
 
                 Returns:
                     The :class:`~jupedsim.Geometry` to pass to :class:`~jupedsim.Simulation`.
