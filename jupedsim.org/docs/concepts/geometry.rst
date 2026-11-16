@@ -162,7 +162,8 @@ many vertices of a small circle made with ``buffer``. Use fewer segments, e.g.
 ``shapely.simplify(walkable_area, 0.025)``, and check the result.
 
 Regions at the same height must neither overlap nor touch each other; join them into one polygon
-instead. :meth:`~jupedsim.GeometryBuilder.build` reports this, as it can only be checked once all
+instead. Regions above each other must be at least 1.5 m apart in height where they overlap.
+:meth:`~jupedsim.GeometryBuilder.build` reports this, as it can only be checked once all
 regions are known. A region cannot be removed from a builder again, so create a new
 :class:`~jupedsim.GeometryBuilder` after such an error.
 

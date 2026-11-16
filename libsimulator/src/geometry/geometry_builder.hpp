@@ -55,8 +55,9 @@ public:
     /// Creates the geometry from the regions and connections added so far. The builder is
     /// left unchanged, so it can be extended and built again.
     /// Validates what needs the whole input: regions on one height must neither overlap nor
-    /// touch, all vertices need a clearance of min_clearance, and the resulting surface must be
-    /// walkable, free of faces passing through each other and connected.
+    /// touch, regions less than min_headroom above each other must not overlap, all vertices
+    /// need a clearance of min_clearance, and the resulting surface must be walkable, free of
+    /// faces passing through each other and connected.
     /// @throws SimulationError if the input does not form a valid geometry.
     std::unique_ptr<Geometry> build() const;
 
@@ -90,6 +91,8 @@ private:
     /// Heights closer than this in meters count as the same height, so that float noise like
     /// 0.1 + 0.2 != 0.3 neither lets floors overlap nor tilts a flat connector.
     static constexpr double height_tolerance{1e-6};
+    /// Smallest height difference in meters between floors above each other.
+    static constexpr double min_headroom{1.5};
 
     std::array<size_t, 2> find_edge(size_t region_id, const LineSegment& edge) const;
 

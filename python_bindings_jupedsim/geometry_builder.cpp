@@ -140,10 +140,11 @@ void init_geometry_builder(py::module_& m)
 
                 Raises:
                     SimulationError: If no region was added, regions at the same height
-                        overlap or touch, two vertices of different regions are closer than
-                        2.5 cm, or the regions do not form one connected walkable surface
-                        without parts passing through each other. Regions cannot be removed,
-                        so after such an error the geometry has to be added to a new builder.
+                        overlap or touch, regions less than 1.5 m above each other overlap,
+                        two vertices of different regions are closer than 2.5 cm, or the
+                        regions do not form one connected walkable surface without parts
+                        passing through each other. Regions cannot be removed, so after such
+                        an error the geometry has to be added to a new builder.
             )")
                 .c_str());
 }

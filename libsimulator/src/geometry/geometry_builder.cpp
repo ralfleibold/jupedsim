@@ -390,8 +390,9 @@ std::unique_ptr<Geometry> GeometryBuilder::build() const
         throw SimulationError("No Geometry defined.");
     }
 
-    // Regions on one height (up to height_tolerance) must neither overlap nor touch. Before the
-    // clearance check, which would report regions touching at a vertex less specifically.
+    // Regions on one height (up to height_tolerance) must neither overlap nor touch, regions
+    // less than min_headroom above each other must not overlap. Before the clearance check,
+    // which would report regions touching at a vertex less specifically.
     using Box = CGAL::Box_intersection_d::Box_with_info_d<double, 2, size_t>;
     std::vector<Box> floors{};
     for(const auto region_id : boost::make_iterator_range(boost::vertices(_region_graph))) {
@@ -405,7 +406,8 @@ std::unique_ptr<Geometry> GeometryBuilder::build() const
         const size_t second = std::max(a.info(), b.info());
         const Region& first_region = _region_graph[first];
         const Region& second_region = _region_graph[second];
-        if(std::abs(*first_region.height - *second_region.height) > height_tolerance) {
+        const double height_difference = std::abs(*first_region.height - *second_region.height);
+        if(height_difference >= min_headroom) {
             return;
         }
         // Exact: the epick Boolean operations crash or misclassify nearly degenerate pairs. The
@@ -413,11 +415,21 @@ std::unique_ptr<Geometry> GeometryBuilder::build() const
         const auto side = CGAL::oriented_side(
             into<epeck::PolyWithHoles>(first_region.poly_with_holes),
             into<epeck::PolyWithHoles>(second_region.poly_with_holes));
-        if(side == CGAL::ON_POSITIVE_SIDE) {
-            throw SimulationError("Region {} overlaps with region {}.", second, first);
-        }
-        if(side == CGAL::ON_ORIENTED_BOUNDARY) {
-            throw SimulationError("Region {} touches region {}.", second, first);
+        if(height_difference <= height_tolerance) {
+            if(side == CGAL::ON_POSITIVE_SIDE) {
+                throw SimulationError("Region {} overlaps with region {}.", second, first);
+            }
+            if(side == CGAL::ON_ORIENTED_BOUNDARY) {
+                throw SimulationError("Region {} touches region {}.", second, first);
+            }
+        } else if(side == CGAL::ON_POSITIVE_SIDE) {
+            throw SimulationError(
+                "Regions {} and {} overlap only {} m above each other; regions above each other "
+                "need a headroom of {} m.",
+                first,
+                second,
+                height_difference,
+                min_headroom);
         }
     });
 

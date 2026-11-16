@@ -92,18 +92,18 @@ inline TwoConnectedRegions floors_joined_by_stairs()
 }
 
 /// Two floors over the same 20 x 10 footprint, the ground floor at z = 0 (room_1) and the upper
-/// one at z = 3 (room_2), joined by a ramp in the middle (connector). The ramp climbs along
-/// x in [6, 14], y in [4, 6], through an opening of that size in both floors: its foot on the
-/// ground floor's opening edge at x = 6, its top on the upper floor's at x = 14. Built from
-/// regions, so that areas are cut along their footprints.
-inline TwoConnectedRegions stacked_floors_with_ramp()
+/// one at z = "upper_height" (room_2), joined by a ramp in the middle (connector). The ramp
+/// climbs along x in [6, 14], y in [4, 6], through an opening of that size in both floors: its
+/// foot on the ground floor's opening edge at x = 6, its top on the upper floor's at x = 14.
+/// Built from regions, so that areas are cut along their footprints.
+inline TwoConnectedRegions stacked_floors_with_ramp(double upper_height = 3.0)
 {
     TwoConnectedRegions out{};
     const auto footprint = rectangle_points({0, 0}, {20, 10});
     const auto opening = rectangle_points({6, 4}, {14, 6});
     GeometryBuilder surface{};
     out.room_1 = surface.add_region(GeometryBuilder::Polygon{footprint, {opening}}, 0.0);
-    out.room_2 = surface.add_region(GeometryBuilder::Polygon{footprint, {opening}}, 3.0);
+    out.room_2 = surface.add_region(GeometryBuilder::Polygon{footprint, {opening}}, upper_height);
     out.connector =
         surface.connect_regions(out.room_1, {{6, 4}, {6, 6}}, out.room_2, {{14, 4}, {14, 6}});
     out.geometry = surface.build();

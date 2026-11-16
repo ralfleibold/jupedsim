@@ -293,6 +293,22 @@ TEST(GeometryBuilder, BuildRejectsOverlappingFloors)
     EXPECT_THROW(builder.build(), SimulationError);
 }
 
+TEST(GeometryBuilder, BuildRejectsFloorsLessThanTheHeadroomAboveEachOther)
+{
+    try {
+        test_geometries::stacked_floors_with_ramp(1.0);
+        FAIL() << "build() accepted floors 1 m above each other";
+    } catch(const SimulationError& error) {
+        EXPECT_NE(std::string_view(error.what()).find("headroom"), std::string_view::npos)
+            << error.what();
+    }
+}
+
+TEST(GeometryBuilder, BuildAcceptsFloorsTheHeadroomAboveEachOther)
+{
+    EXPECT_NO_THROW(test_geometries::stacked_floors_with_ramp(1.5));
+}
+
 TEST(GeometryBuilder, BuildRejectsFloorsTouchingAlongAnEdge)
 {
     GeometryBuilder builder{};
